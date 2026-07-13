@@ -9,6 +9,9 @@ obj/
 *.pdb
 TestResults/
 
+# ---- Published client (copied into server at publish time) ----
+server/Rummikub.Server/wwwroot/
+
 # ---- Node / client ----
 node_modules/
 dist/
