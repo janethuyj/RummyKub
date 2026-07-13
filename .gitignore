@@ -1,0 +1,29 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+.vs/
+[Dd]ebug/
+[Rr]elease/
+*.dll
+*.pdb
+TestResults/
+
+# ---- Node / client ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ---- Env / local config ----
+.env
+.env.*
+!.env.example
+appsettings.Development.local.json
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/

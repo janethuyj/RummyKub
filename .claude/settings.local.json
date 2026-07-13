@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(*)",
+      "Bash(dotnet --version)",
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(gh --version)"
+    ]
+  }
+}
