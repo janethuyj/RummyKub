@@ -1,0 +1,35 @@
+# Production compose for a single Oracle Cloud VM.
+# Caddy handles HTTPS on 80/443 and reverse-proxies to the app on 8080.
+#
+#   cd repo root, then:  docker compose -f deploy/docker-compose.yml up -d --build
+#
+# The app holds all game state in memory, so run exactly ONE app replica.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    # Or pull a prebuilt image instead of building on the VM:
+    # image: <region-key>.ocir.io/<tenancy-namespace>/rummykub:latest
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    expose:
+      - "8080"          # internal only; not published to the host
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

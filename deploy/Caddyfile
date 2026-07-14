@@ -1,0 +1,8 @@
+# Caddy reverse proxy: terminates HTTPS (automatic Let's Encrypt certificate)
+# and forwards to the app container. WebSocket upgrades (SignalR) pass through
+# automatically — no extra config needed.
+#
+# Replace rummykub.example.com with your real domain (DNS A record -> VM IP).
+rummykub.example.com {
+    reverse_proxy app:8080
+}
