@@ -12,7 +12,12 @@ export function getConnection(onState: (s: GameState) => void): signalR.HubConne
 
   connection = new signalR.HubConnectionBuilder()
     .withUrl('/hub/game')
-    .withAutomaticReconnect()
+    // Never give up reconnecting — mobile screens lock and networks blip, and the
+    // default policy stops after ~60s, stranding the client until a manual refresh.
+    .withAutomaticReconnect({
+      nextRetryDelayInMilliseconds: (ctx) =>
+        ctx.elapsedMilliseconds < 60_000 ? 2_000 : 10_000,
+    })
     .configureLogging(signalR.LogLevel.Warning)
     .build();
 

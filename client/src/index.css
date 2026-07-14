@@ -6,10 +6,11 @@
   --tile-bg: #faf7ef;
   --tile-edge: #d8cfb8;
   --ink: #1c2430;
-  --red: #c8102e;
-  --blue: #0b5fa5;
-  --black: #1c2430;
-  --orange: #e07b1a;
+  /* High-contrast tile colours: red vs amber-orange, and bright blue vs near-black. */
+  --red: #d11a2a;
+  --blue: #1668dc;
+  --black: #0d1117;
+  --orange: #eb9200;
   --accent: #ffd257;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
@@ -262,4 +263,36 @@ input {
   :root { --cell-w: 25px; --cell-h: 34px; }
   .tile { width: 25px; height: 34px; }
   .tile-face { font-size: 14px; }
+}
+
+/* Short/wide viewports (phones in landscape, small windows): size cells so ALL
+   21 columns fit the width — no horizontal scroll — and drop chrome for height. */
+@media (max-height: 540px) {
+  .app { height: 100dvh; min-height: 0; overflow: hidden; }
+  .app-header { display: none; }
+  .app-main { height: 100dvh; min-height: 0; padding: 4px; gap: 4px; }
+  .game-table { height: 100%; max-height: 100%; min-height: 0; gap: 4px; }
+  .board-caption { display: none; }
+
+  /* 21 columns + 20 one-pixel gaps fit within the viewport width. */
+  :root {
+    --cell-w: calc((100vw - 54px) / 21);
+    --cell-h: calc((100vw - 54px) / 21 * 1.32);
+  }
+  .grid { gap: 1px; }
+  /* flex:1 with min-height:0 lets the board scroll internally so the rack and
+     controls below it stay visible instead of being pushed off-screen. */
+  .board-scroll { flex: 1 1 0; min-height: 0; overflow: auto; overflow-x: hidden; padding: 4px; }
+  .cell { border-radius: 4px; }
+
+  .tile { width: var(--cell-w); height: var(--cell-h); border-radius: 4px; }
+  .tile-face { font-size: calc((100vw - 54px) / 21 * 0.5); }
+
+  .top-bar { gap: 5px; }
+  .player-chip { padding: 2px 7px; font-size: 11px; }
+  .rack { padding: 4px; gap: 2px; }
+  .rack-gap { width: 8px; }
+  .controls { gap: 4px; }
+  .controls .btn { padding: 6px 8px; font-size: 12px; }
+  .hint-toggle { flex-basis: auto; }
 }

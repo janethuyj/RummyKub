@@ -155,7 +155,9 @@ function Controls() {
   const organize = useStore((s) => s.organize);
   const requestHint = useStore((s) => s.requestHint);
   const toggleHint = useStore((s) => s.toggleHint);
+  const toggleSound = useStore((s) => s.toggleSound);
   const hintEnabled = useStore((s) => s.hintEnabled);
+  const soundEnabled = useStore((s) => s.soundEnabled);
   const autoOrganize = useStore((s) => s.autoOrganize);
   const working = useStore((s) => s.working);
   const undoStack = useStore((s) => s.undoStack);
@@ -204,6 +206,13 @@ function Controls() {
           💡 Hint
         </button>
       )}
+      <button
+        className="btn tiny"
+        onClick={toggleSound}
+        title={soundEnabled ? 'Sound on' : 'Sound off'}
+      >
+        {soundEnabled ? '🔊' : '🔇'}
+      </button>
       <label className="hint-toggle">
         <input type="checkbox" checked={hintEnabled} onChange={toggleHint} />
         Hints

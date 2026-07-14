@@ -75,11 +75,17 @@ sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 ```
 
-### 3b. Install Docker
+### 3b. Install Docker (and the Compose plugin)
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER   # log out/in so 'docker' works without sudo
+
+# Confirm Docker Compose v2 is present; if not, install the plugin:
+docker compose version || sudo apt-get update && sudo apt-get install -y docker-compose-plugin
 ```
+> If `docker compose` (with a space) prints “not a docker command”, the v2 plugin
+> is missing — the line above installs it. If your VM only has the older
+> standalone tool, use `docker-compose` (with a hyphen) in every command below.
 
 ### 3c. Get the code
 ```bash

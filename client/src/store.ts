@@ -4,6 +4,9 @@ import type { GameState, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
 import { findSets, organizeRack } from './rummikub';
 import { cloneGrid, findTileCell, Grid, gridToSets, placeSetByDefault, reconcileGrid } from './board';
+import { playTileDrawn, playTilePlayed } from './sound';
+
+const boardTileCount = (board: Tile[][]) => board.reduce((n, s) => n + s.length, 0);
 
 const STORAGE_KEY = 'rummykub.session';
 
@@ -32,6 +35,7 @@ interface Store {
   rackGaps: number[];
   selectedIds: number[];
   justDrawnIds: number[];
+  soundEnabled: boolean;
 
   connect: () => Promise<void>;
   createRoom: (name: string) => Promise<void>;
@@ -50,6 +54,7 @@ interface Store {
   undo: () => void;
   undoAll: () => void;
   toggleHint: () => void;
+  toggleSound: () => void;
   clearError: () => void;
   leave: () => void;
 }
@@ -86,12 +91,19 @@ export const useStore = create<Store>((set, get) => ({
   rackGaps: [],
   selectedIds: [],
   justDrawnIds: [],
+  soundEnabled: true,
 
   connect: async () => {
     conn = getConnection((state: GameState) => {
       // Every broadcast is server truth: reset the per-turn working copy and
       // clear the undo history (undo is scoped to the current turn).
       const prev = get();
+
+      // Sound cues: someone drew (draw pile shrank) or played (board grew).
+      if (prev.soundEnabled && prev.game) {
+        if (state.drawPileCount < prev.game.drawPileCount) playTileDrawn();
+        else if (boardTileCount(state.board) > boardTileCount(prev.game.board)) playTilePlayed();
+      }
 
       // Briefly highlight tiles that just arrived in hand (a draw), but not the
       // initial deal or a reconnect.
@@ -124,6 +136,15 @@ export const useStore = create<Store>((set, get) => ({
         justDrawnIds,
       });
     });
+
+    // After an automatic reconnect the server sees a NEW connection id, so we
+    // must re-bind our seat or we stop receiving broadcasts (the "had to refresh"
+    // bug). Rejoining rebinds the connection and pushes fresh state.
+    conn.onreconnected(() => {
+      const saved = loadSession();
+      if (saved && conn) void hub.rejoin(conn, saved.roomCode, saved.playerId);
+    });
+
     await ensureStarted(conn);
     set({ connected: true });
 
@@ -298,6 +319,7 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   toggleHint: () => set((s) => ({ hintEnabled: !s.hintEnabled, hintTileIds: [] })),
+  toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
   clearError: () => set({ error: null }),
   leave: () => {
     localStorage.removeItem(STORAGE_KEY);
