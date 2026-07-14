@@ -3,7 +3,7 @@ import type { HubConnection } from '@microsoft/signalr';
 import type { GameState, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
 import { findSets, organizeRack } from './rummikub';
-import { cloneGrid, findTileCell, Grid, gridToSets, layoutSetsToGrid } from './board';
+import { cloneGrid, findTileCell, Grid, gridToSets, placeSetByDefault, reconcileGrid } from './board';
 
 const STORAGE_KEY = 'rummykub.session';
 
@@ -86,9 +86,11 @@ export const useStore = create<Store>((set, get) => ({
       // clear the undo history (undo is scoped to the current turn). If the
       // player enabled auto-organize, keep the rack organized across draws.
       const rack = get().autoOrganize ? organizeRack(state.yourRack) : [...state.yourRack];
+      // Preserve tiles the player already positioned; only auto-place new sets.
+      const prevGrid = get().working?.grid ?? null;
       set({
         game: state,
-        working: { grid: layoutSetsToGrid(state.board), rack },
+        working: { grid: reconcileGrid(prevGrid, state.board), rack },
         undoStack: [],
         hintTileIds: [],
       });
@@ -220,8 +222,9 @@ export const useStore = create<Store>((set, get) => ({
       set({ error: 'No complete sets in your hand to play.' });
       return;
     }
-    const existing = gridToSets(working.grid);
-    const grid = layoutSetsToGrid([...existing, ...sets]);
+    // Add the new sets by the default convention, leaving existing tiles in place.
+    const grid = cloneGrid(working.grid);
+    for (const s of sets) placeSetByDefault(grid, s);
     const usedIds = new Set(sets.flat().map((t) => t.id));
     const rack = working.rack.filter((t) => !usedIds.has(t.id));
     set({ undoStack: [...get().undoStack, clone(working)], working: { grid, rack }, hintTileIds: [] });
@@ -236,13 +239,11 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   undoAll: () => {
-    const { game, autoOrganize } = get();
-    if (!game) return;
-    const rack = autoOrganize ? organizeRack(game.yourRack) : [...game.yourRack];
-    set({
-      working: { grid: layoutSetsToGrid(game.board), rack },
-      undoStack: [],
-    });
+    // Restore the exact start-of-turn state (the first snapshot in the stack),
+    // which keeps whatever board layout existed when the turn began.
+    const { undoStack } = get();
+    if (undoStack.length === 0) return;
+    set({ working: clone(undoStack[0]), undoStack: [] });
   },
 
   toggleHint: () => set((s) => ({ hintEnabled: !s.hintEnabled, hintTileIds: [] })),
