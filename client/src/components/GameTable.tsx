@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   closestCenter,
   CollisionDetection,
@@ -28,6 +29,10 @@ export function GameTable() {
   const working = useStore((s) => s.working);
   const moveTile = useStore((s) => s.moveTile);
   const hintTileIds = useStore((s) => s.hintTileIds);
+  const rackGaps = useStore((s) => s.rackGaps);
+  const selectedIds = useStore((s) => s.selectedIds);
+  const justDrawnIds = useStore((s) => s.justDrawnIds);
+  const toggleSelect = useStore((s) => s.toggleSelect);
 
   const myTurn = isMyTurn(game);
   // One pointer sensor handles both mouse and touch. Dragging starts after an
@@ -50,6 +55,9 @@ export function GameTable() {
   const grid = working?.grid ?? [];
   const rack = working?.rack ?? game.yourRack;
   const hintSet = new Set(hintTileIds);
+  const gapSet = new Set(rackGaps);
+  const selectedSet = new Set(selectedIds);
+  const drawnSet = new Set(justDrawnIds);
 
   return (
     <div className="game-table">
@@ -74,13 +82,27 @@ export function GameTable() {
         </div>
 
         <DropZone id="rack" className="rack" aria-label="Your rack">
-          {rack.map((t) => (
-            <DraggableTile key={t.id} tile={t} disabled={!myTurn} highlighted={hintSet.has(t.id)} />
+          {rack.map((t, i) => (
+            <Fragment key={t.id}>
+              {gapSet.has(i) && <span className="rack-gap" aria-hidden="true" />}
+              <DraggableTile
+                tile={t}
+                disabled={!myTurn}
+                highlighted={hintSet.has(t.id)}
+                selected={selectedSet.has(t.id)}
+                justDrawn={drawnSet.has(t.id)}
+                onSelect={myTurn ? () => toggleSelect(t.id) : undefined}
+              />
+            </Fragment>
           ))}
         </DropZone>
       </DndContext>
 
-      {myTurn && <p className="board-caption">Drag tiles into the grid — leave a gap between sets.</p>}
+      {myTurn && (
+        <p className="board-caption">
+          Drag tiles into the grid, or tap tiles to select and use Play selected.
+        </p>
+      )}
 
       <Controls />
       {game.status === 'Finished' && <WinnerOverlay />}
@@ -137,10 +159,12 @@ function Controls() {
   const autoOrganize = useStore((s) => s.autoOrganize);
   const working = useStore((s) => s.working);
   const undoStack = useStore((s) => s.undoStack);
+  const selectedIds = useStore((s) => s.selectedIds);
 
   const myTurn = isMyTurn(game);
   const placedTiles = working ? game.yourRack.length - working.rack.length : 0;
   const canCommit = myTurn && placedTiles > 0;
+  const hasSelection = selectedIds.length > 0;
 
   return (
     <div className="controls">
@@ -150,10 +174,14 @@ function Controls() {
       <button
         className="btn"
         disabled={!myTurn}
-        title="Lay every complete set from your hand onto the board and play them"
-        onClick={() => void autoPlay()}
+        title={
+          hasSelection
+            ? 'Lay the selected tiles onto the board (then press Play to end your turn)'
+            : 'Lay every complete set from your hand onto the board (then press Play to end your turn)'
+        }
+        onClick={autoPlay}
       >
-        ⚡ Auto-play
+        {hasSelection ? `▶ Play selected (${selectedIds.length})` : '⚡ Auto-play'}
       </button>
       <button className="btn" disabled={!myTurn} onClick={() => void draw()}>
         Draw &amp; pass
@@ -224,7 +252,21 @@ function BoardCell({
   );
 }
 
-function DraggableTile({ tile, disabled, highlighted }: { tile: Tile; disabled: boolean; highlighted: boolean }) {
+function DraggableTile({
+  tile,
+  disabled,
+  highlighted,
+  selected,
+  justDrawn,
+  onSelect,
+}: {
+  tile: Tile;
+  disabled: boolean;
+  highlighted: boolean;
+  selected?: boolean;
+  justDrawn?: boolean;
+  onSelect?: () => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: String(tile.id),
     disabled,
@@ -234,7 +276,11 @@ function DraggableTile({ tile, disabled, highlighted }: { tile: Tile; disabled: 
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`tile-wrap ${isDragging ? 'is-dragging' : ''} ${disabled ? 'locked' : ''}`}
+      onClick={onSelect}
+      className={
+        `tile-wrap ${isDragging ? 'is-dragging' : ''} ${disabled ? 'locked' : ''} ` +
+        `${selected ? 'selected' : ''} ${justDrawn ? 'just-drawn' : ''}`
+      }
     >
       <TileView tile={tile} highlighted={highlighted} />
     </div>

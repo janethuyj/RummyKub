@@ -29,6 +29,9 @@ interface Store {
   hintEnabled: boolean;
   hintTileIds: number[];
   autoOrganize: boolean;
+  rackGaps: number[];
+  selectedIds: number[];
+  justDrawnIds: number[];
 
   connect: () => Promise<void>;
   createRoom: (name: string) => Promise<void>;
@@ -42,7 +45,8 @@ interface Store {
 
   moveTile: (tileId: number, to: Container) => void;
   organize: () => void;
-  autoPlay: () => Promise<void>;
+  autoPlay: () => void;
+  toggleSelect: (tileId: number) => void;
   undo: () => void;
   undoAll: () => void;
   toggleHint: () => void;
@@ -79,20 +83,45 @@ export const useStore = create<Store>((set, get) => ({
   hintEnabled: true,
   hintTileIds: [],
   autoOrganize: false,
+  rackGaps: [],
+  selectedIds: [],
+  justDrawnIds: [],
 
   connect: async () => {
     conn = getConnection((state: GameState) => {
       // Every broadcast is server truth: reset the per-turn working copy and
-      // clear the undo history (undo is scoped to the current turn). If the
-      // player enabled auto-organize, keep the rack organized across draws.
-      const rack = get().autoOrganize ? organizeRack(state.yourRack) : [...state.yourRack];
+      // clear the undo history (undo is scoped to the current turn).
+      const prev = get();
+
+      // Briefly highlight tiles that just arrived in hand (a draw), but not the
+      // initial deal or a reconnect.
+      let justDrawnIds = prev.justDrawnIds;
+      const prevRack = prev.game?.yourRack;
+      if (prevRack && prevRack.length > 0) {
+        const prevIds = new Set(prevRack.map((t) => t.id));
+        const drawn = state.yourRack.filter((t) => !prevIds.has(t.id)).map((t) => t.id);
+        if (drawn.length > 0 && drawn.length <= 2) {
+          justDrawnIds = drawn;
+          setTimeout(
+            () => set((s) => ({ justDrawnIds: s.justDrawnIds.filter((id) => !drawn.includes(id)) })),
+            2600,
+          );
+        }
+      }
+
+      // Keep the rack organized across draws when auto-organize is on.
+      const org = prev.autoOrganize ? organizeRack(state.yourRack) : null;
+      const rack = org ? org.ordered : [...state.yourRack];
       // Preserve tiles the player already positioned; only auto-place new sets.
-      const prevGrid = get().working?.grid ?? null;
+      const prevGrid = prev.working?.grid ?? null;
       set({
         game: state,
         working: { grid: reconcileGrid(prevGrid, state.board), rack },
         undoStack: [],
         hintTileIds: [],
+        rackGaps: org ? org.gaps : [],
+        selectedIds: [],
+        justDrawnIds,
       });
     });
     await ensureStarted(conn);
@@ -197,6 +226,8 @@ export const useStore = create<Store>((set, get) => ({
       undoStack: [...undoStack, clone(working)],
       working: { grid, rack },
       hintTileIds: [],
+      rackGaps: [], // manual rearranging drops the organized grouping
+      selectedIds: [],
     });
   },
 
@@ -206,37 +237,56 @@ export const useStore = create<Store>((set, get) => ({
     // Auto-organize only reorders the rack (cosmetic), so it is not an undoable
     // move — leave the undo stack untouched. Turn on sticky auto-organize so the
     // rack stays organized after future draws.
+    const org = organizeRack(working.rack);
     set({
       autoOrganize: true,
-      working: { grid: working.grid, rack: organizeRack(working.rack) },
+      working: { grid: working.grid, rack: org.ordered },
+      rackGaps: org.gaps,
+      selectedIds: [],
     });
   },
 
-  autoPlay: async () => {
-    const { working } = get();
+  // Lay complete sets onto the board WITHOUT ending the turn, so the player can
+  // still undo/adjust before committing with Play. If tiles are selected, only
+  // those are considered; otherwise the whole hand is.
+  autoPlay: () => {
+    const { working, selectedIds } = get();
     if (!working) return;
-    // Find every complete set currently in hand, lay them on the board next to
-    // whatever is already there, and try to play them. The server enforces the
-    // 30-point first-meld rule, so if it's short the sets stay staged to adjust.
-    const { sets } = findSets(working.rack);
+    const pool = selectedIds.length > 0
+      ? working.rack.filter((t) => selectedIds.includes(t.id))
+      : working.rack;
+
+    const { sets } = findSets(pool);
     if (sets.length === 0) {
-      set({ error: 'No complete sets in your hand to play.' });
+      set({ error: selectedIds.length > 0 ? 'The selected tiles do not form a complete set.' : 'No complete sets in your hand to play.' });
       return;
     }
-    // Add the new sets by the default convention, leaving existing tiles in place.
     const grid = cloneGrid(working.grid);
     for (const s of sets) placeSetByDefault(grid, s);
     const usedIds = new Set(sets.flat().map((t) => t.id));
     const rack = working.rack.filter((t) => !usedIds.has(t.id));
-    set({ undoStack: [...get().undoStack, clone(working)], working: { grid, rack }, hintTileIds: [] });
-    await get().commit();
+    set({
+      undoStack: [...get().undoStack, clone(working)],
+      working: { grid, rack },
+      hintTileIds: [],
+      rackGaps: [],
+      selectedIds: [],
+    });
+  },
+
+  toggleSelect: (tileId) => {
+    set((s) => ({
+      selectedIds: s.selectedIds.includes(tileId)
+        ? s.selectedIds.filter((id) => id !== tileId)
+        : [...s.selectedIds, tileId],
+    }));
   },
 
   undo: () => {
     const { undoStack } = get();
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
-    set({ working: clone(prev), undoStack: undoStack.slice(0, -1) });
+    set({ working: clone(prev), undoStack: undoStack.slice(0, -1), selectedIds: [] });
   },
 
   undoAll: () => {
@@ -244,14 +294,17 @@ export const useStore = create<Store>((set, get) => ({
     // which keeps whatever board layout existed when the turn began.
     const { undoStack } = get();
     if (undoStack.length === 0) return;
-    set({ working: clone(undoStack[0]), undoStack: [] });
+    set({ working: clone(undoStack[0]), undoStack: [], selectedIds: [] });
   },
 
   toggleHint: () => set((s) => ({ hintEnabled: !s.hintEnabled, hintTileIds: [] })),
   clearError: () => set({ error: null }),
   leave: () => {
     localStorage.removeItem(STORAGE_KEY);
-    set({ game: null, working: null, undoStack: [], hintTileIds: [], autoOrganize: false });
+    set({
+      game: null, working: null, undoStack: [], hintTileIds: [], autoOrganize: false,
+      rackGaps: [], selectedIds: [], justDrawnIds: [],
+    });
   },
 }));
 

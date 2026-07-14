@@ -74,11 +74,25 @@ export function findSets(tiles: Tile[]): { sets: Tile[][]; leftovers: Tile[] } {
   return { sets, leftovers: remaining };
 }
 
+export interface OrganizedRack {
+  ordered: Tile[];
+  /** Rack indices at which to draw a gap (after each set, hence before the loose tiles). */
+  gaps: number[];
+}
+
 /** Auto-organize: valid sets first (grouped), then loose tiles sorted, jokers last. */
-export function organizeRack(rack: Tile[]): Tile[] {
+export function organizeRack(rack: Tile[]): OrganizedRack {
   const { sets, leftovers } = findSets(rack);
   const loose = [...leftovers].sort(byColorThenNumber);
-  return [...sets.flat(), ...loose];
+  const ordered = [...sets.flat(), ...loose];
+
+  const gaps: number[] = [];
+  let idx = 0;
+  for (const s of sets) {
+    idx += s.length;
+    gaps.push(idx); // gap after this set
+  }
+  return { ordered, gaps };
 }
 
 function byColorThenNumber(a: Tile, b: Tile): number {

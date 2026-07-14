@@ -172,6 +172,14 @@ input {
 .tile-wrap { touch-action: none; cursor: grab; }
 .tile-wrap.locked { cursor: default; }
 .tile-wrap.is-dragging { opacity: 0.4; }
+.tile-wrap.selected { transform: translateY(-14px); z-index: 2; }
+.tile-wrap.selected .tile { outline: 3px solid var(--accent); box-shadow: 0 8px 10px rgba(0, 0, 0, 0.45); }
+.tile-wrap.just-drawn .tile { animation: draw-flash 2.6s ease-out; }
+@keyframes draw-flash {
+  0%, 25% { box-shadow: 0 0 0 3px var(--accent), 0 0 18px var(--accent); }
+  100% { box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3); }
+}
+.rack-gap { width: 18px; flex: 0 0 auto; }
 .tile {
   width: 44px; height: 58px;
   background: var(--tile-bg);
@@ -215,25 +223,34 @@ input {
 .game-table { max-height: calc(100vh - 60px); }
 
 @media (max-width: 640px) {
-  .app-header { padding: 8px 12px; }
-  .logo { font-size: 17px; }
-  .app-main { padding: 8px; gap: 8px; }
-  .game-table { max-height: calc(100vh - 48px); gap: 8px; }
+  /* Fit the whole game in one mobile screen; the board scrolls internally.
+     100dvh tracks the dynamic viewport so mobile browser chrome is accounted for. */
+  .app { min-height: 100dvh; }
+  .app-main { padding: 6px; gap: 6px; height: calc(100dvh - 42px); }
+  .game-table { max-height: 100%; gap: 6px; }
 
-  .top-bar { gap: 6px; }
-  .player-chip { padding: 4px 9px; font-size: 12px; }
-  .top-right { gap: 8px; }
-  .draw-pile { font-size: 12px; }
+  .app-header { padding: 6px 12px; }
+  .logo { font-size: 16px; }
 
-  :root { --cell-w: 34px; --cell-h: 44px; }
-  .board-scroll { min-height: 110px; padding: 8px; }
-  .rack { padding: 9px; gap: 4px; }
+  .top-bar { gap: 5px; }
+  .player-chip { padding: 3px 8px; font-size: 11px; }
+  .top-right { gap: 6px; }
+  .draw-pile { font-size: 11px; }
+  .turn-timer { padding: 3px 8px; font-size: 12px; }
+  .btn.tiny { padding: 4px 8px; }
 
-  .tile { width: 34px; height: 46px; border-radius: 6px; }
-  .tile-face { font-size: 19px; }
+  :root { --cell-w: 28px; --cell-h: 38px; }
+  .board-scroll { min-height: 76px; padding: 6px; border-radius: 10px; }
+  .grid { gap: 3px; }
+  .rack { padding: 7px; gap: 3px; border-radius: 10px; }
+  .rack-gap { width: 12px; }
 
-  .controls { gap: 6px; }
-  .controls .btn { padding: 9px 11px; font-size: 13px; flex: 1 1 auto; }
+  .tile { width: 28px; height: 38px; border-radius: 5px; }
+  .tile-face { font-size: 16px; }
+  .board-caption { font-size: 11px; }
+
+  .controls { gap: 5px; }
+  .controls .btn { padding: 8px 9px; font-size: 12px; flex: 1 1 auto; }
   .hint-toggle { margin-left: 0; flex: 1 1 100%; justify-content: center; padding-top: 2px; }
 
   .card { margin: 12px auto; padding: 16px; }
@@ -242,7 +259,7 @@ input {
 }
 
 @media (max-width: 380px) {
-  :root { --cell-w: 30px; --cell-h: 40px; }
-  .tile { width: 30px; height: 40px; }
-  .tile-face { font-size: 16px; }
+  :root { --cell-w: 25px; --cell-h: 34px; }
+  .tile { width: 25px; height: 34px; }
+  .tile-face { font-size: 14px; }
 }
