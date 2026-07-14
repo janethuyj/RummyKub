@@ -2,7 +2,7 @@
 # and forwards to the app container. WebSocket upgrades (SignalR) pass through
 # automatically — no extra config needed.
 #
-# Replace rummykub.example.com with your real domain (DNS A record -> VM IP).
-rummykub.example.com {
+# DNS: create an A record for rummykub.helleon.com -> your VM's public IP.
+rummykub.helleon.com {
     reverse_proxy app:8080
 }

@@ -54,7 +54,7 @@ Create these resources in the OCI console:
 | 2 | **Ingress rules** (Security List or NSG on the public subnet) | Allow TCP **22** (SSH — ideally your IP only), **80**, and **443** from `0.0.0.0/0`. |
 | 3 | **Compute Instance** | Shape **VM.Standard.A1.Flex** (Ampere ARM, Always Free: up to 4 OCPU / 24 GB) *or* **VM.Standard.E2.1.Micro** (AMD x86, Always Free, 1 GB). Image: **Ubuntu 22.04**. Place in the public subnet, assign a public IP, add your SSH public key. |
 | 4 | **Public IP** | Ephemeral is fine; reserve a static one if you want it to survive stop/start. |
-| 5 | **DNS A record** | Point `rummykub.yourdomain.com` at the VM’s public IP. Required for Let’s Encrypt to issue a certificate. |
+| 5 | **DNS A record** | In your `helleon.com` DNS, add **A record: `rummykub` → `<VM public IP>`** (host `rummykub`, giving `rummykub.helleon.com`). Required for Let’s Encrypt to issue the certificate. |
 | 6 | *(optional)* **OCIR** — Container Registry | Only if you want to build the image elsewhere and pull it. You’ll also generate an **Auth Token** (used as the docker login password). Skip this if you build on the VM. |
 
 > ⚠️ **OCI gotcha — two firewalls.** Opening ports in the OCI Security
@@ -81,12 +81,13 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER   # log out/in so 'docker' works without sudo
 ```
 
-### 3c. Get the code and set your domain
+### 3c. Get the code
 ```bash
 git clone https://github.com/janethuyj/RummyKub.git
 cd RummyKub
-sed -i 's/rummykub.example.com/rummykub.yourdomain.com/' deploy/Caddyfile
 ```
+The Caddyfile is already set to `rummykub.helleon.com`. (To use a different host,
+edit `deploy/Caddyfile` before the next step.)
 
 ### 3d. Build and run (Caddy auto-provisions HTTPS)
 ```bash
@@ -94,8 +95,9 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 Building on the VM produces the right CPU architecture automatically (arm64 on
-A1, x86 on E2). Visit **https://rummykub.yourdomain.com** — Caddy fetches a
-Let’s Encrypt certificate on first request, and SignalR runs over `wss://`.
+A1, x86 on E2). Make sure the `rummykub` A record already points at the VM, then
+visit **https://rummykub.helleon.com** — Caddy fetches a Let’s Encrypt
+certificate on first request, and SignalR runs over `wss://`.
 
 **Update later:**
 ```bash
@@ -105,7 +107,7 @@ git pull && docker compose -f deploy/docker-compose.yml up -d --build
 **Logs / health:**
 ```bash
 docker compose -f deploy/docker-compose.yml logs -f app
-curl -k https://rummykub.yourdomain.com/health
+curl -k https://rummykub.helleon.com/health
 ```
 
 ### Optional: build elsewhere and push to OCIR instead of building on the VM
