@@ -23,22 +23,32 @@ function isGroup(tiles: Tile[]): boolean {
   return jokers <= 4 - nonJokers.length;
 }
 
+// Positional run check (mirrors the engine): each tile's number is fixed by its
+// position and a joker takes the implied number, which must stay within 1..13 —
+// so a joker after a 13 (a 14) or before a 1 (a 0) is rejected.
 function isRun(tiles: Tile[]): boolean {
   if (tiles.length < 3) return false;
-  const nonJokers = tiles.filter((t) => !t.isJoker);
-  const jokers = tiles.length - nonJokers.length;
-  if (nonJokers.length === 0) return tiles.length <= 13;
-  const color = nonJokers[0].color;
-  if (nonJokers.some((t) => t.color !== color)) return false;
-  const nums = nonJokers.map((t) => t.number);
-  if (new Set(nums).size !== nums.length) return false;
-  const min = Math.min(...nums);
-  const max = Math.max(...nums);
-  const interiorGaps = max - min + 1 - nonJokers.length;
-  if (interiorGaps < 0 || interiorGaps > jokers) return false;
-  const leftover = jokers - interiorGaps;
-  const room = min - 1 + (13 - max);
-  return leftover <= room; // block length always equals tiles.length by construction
+
+  let color: Tile['color'] = null;
+  let base: number | null = null;
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i].isJoker) continue;
+    color = tiles[i].color;
+    base = tiles[i].number - i;
+    break;
+  }
+  if (base === null) return tiles.length <= 13; // all jokers
+
+  const start = base;
+  const end = start + tiles.length - 1;
+  if (start < 1 || end > 13) return false;
+
+  for (let i = 0; i < tiles.length; i++) {
+    const t = tiles[i];
+    if (t.isJoker) continue;
+    if (t.color !== color || t.number !== start + i) return false;
+  }
+  return true;
 }
 
 /** Greedily pull disjoint valid sets out of the tiles, spending jokers last. */
@@ -111,10 +121,15 @@ function findLargestSet(tiles: Tile[]): Tile[] | null {
 }
 
 function extendWithJoker(sets: Tile[][], joker: Tile): boolean {
+  // Insert the joker where it keeps the set valid (runs are order-sensitive).
   for (const set of sets) {
-    if (isValidSet([...set, joker])) {
-      set.push(joker);
-      return true;
+    for (let pos = 0; pos <= set.length; pos++) {
+      const candidate = [...set.slice(0, pos), joker, ...set.slice(pos)];
+      if (isValidSet(candidate)) {
+        set.length = 0;
+        set.push(...candidate);
+        return true;
+      }
     }
   }
   return false;
@@ -123,12 +138,20 @@ function extendWithJoker(sets: Tile[][], joker: Tile): boolean {
 function completeWithJoker(remaining: Tile[], joker: Tile, sets: Tile[][]): boolean {
   for (let a = 0; a < remaining.length; a++) {
     for (let b = a + 1; b < remaining.length; b++) {
-      if (isValidSet([remaining[a], remaining[b], joker])) {
-        const set = [remaining[a], remaining[b], joker];
-        remaining.splice(b, 1);
-        remaining.splice(a, 1);
-        sets.push(set);
-        return true;
+      const pairs = [
+        [remaining[a], remaining[b]],
+        [remaining[b], remaining[a]],
+      ];
+      for (const pair of pairs) {
+        for (let pos = 0; pos <= 2; pos++) {
+          const candidate = [...pair.slice(0, pos), joker, ...pair.slice(pos)];
+          if (isValidSet(candidate)) {
+            remaining.splice(b, 1);
+            remaining.splice(a, 1);
+            sets.push(candidate);
+            return true;
+          }
+        }
       }
     }
   }

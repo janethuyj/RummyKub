@@ -63,62 +63,48 @@ public static class RuleValidator
     }
 
     /// <summary>
-    /// Run = consecutive numbers, same colour, length ≥ 3, within 1..13. Jokers
-    /// fill interior gaps and may extend either end. Value = sum of the numbers in
-    /// the resulting consecutive block; leftover jokers extend upward (higher value)
-    /// when there is room, matching a player's incentive at meld time.
+    /// Run = consecutive numbers of one colour, length ≥ 3. Validation is
+    /// positional: each tile's number is fixed by its position and a joker takes the
+    /// number implied by where it sits, which must stay within 1..13. So a joker
+    /// placed after a 13 (a 14) is rejected, matching the physical game. Value = sum
+    /// of the numbers in the run.
     /// </summary>
     private static SetEvaluation EvaluateRun(IReadOnlyList<Tile> tiles)
     {
         if (tiles.Count < MinSetSize)
             return SetEvaluation.Invalid;
 
-        var nonJokers = tiles.Where(t => !t.IsJoker).ToList();
-        int jokers = tiles.Count - nonJokers.Count;
-
-        // All jokers: any consecutive block of length 3..13 works. Give it the
-        // lowest such block for a deterministic (small) value.
-        if (nonJokers.Count == 0)
+        // The first concrete tile fixes the colour and the number implied at index 0.
+        TileColor color = default;
+        int? baseNumber = null;
+        for (int i = 0; i < tiles.Count; i++)
         {
-            if (tiles.Count > 13) return SetEvaluation.Invalid;
-            int sumLow = Enumerable.Range(1, tiles.Count).Sum();
-            return new SetEvaluation(SetKind.Run, sumLow);
+            if (tiles[i].IsJoker) continue;
+            color = tiles[i].Color;
+            baseNumber = tiles[i].Number - i;
+            break;
         }
 
-        // Single colour.
-        var color = nonJokers[0].Color;
-        if (nonJokers.Any(t => t.Color != color))
-            return SetEvaluation.Invalid;
+        // All jokers: a length 3..13 run is satisfiable (treat as 1..n for a value).
+        if (baseNumber is null)
+            return tiles.Count <= 13
+                ? new SetEvaluation(SetKind.Run, SumRange(1, tiles.Count))
+                : SetEvaluation.Invalid;
 
-        // Distinct numbers (no duplicate values within a run).
-        var numbers = nonJokers.Select(t => t.Number).ToList();
-        if (numbers.Distinct().Count() != numbers.Count)
-            return SetEvaluation.Invalid;
+        int start = baseNumber.Value;
+        int end = start + tiles.Count - 1;
+        if (start < 1 || end > 13)
+            return SetEvaluation.Invalid; // would run below 1 or above 13 (e.g. joker as a 14)
 
-        int min = numbers.Min();
-        int max = numbers.Max();
-        int span = max - min + 1;           // positions the concrete tiles straddle
-        int interiorGaps = span - nonJokers.Count;
-        if (interiorGaps < 0 || interiorGaps > jokers)
-            return SetEvaluation.Invalid;   // duplicate/overlap or not enough jokers
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            var tile = tiles[i];
+            if (tile.IsJoker) continue;                         // joker = the implied number
+            if (tile.Color != color || tile.Number != start + i)
+                return SetEvaluation.Invalid;                   // wrong colour or out of sequence
+        }
 
-        int leftover = jokers - interiorGaps;   // jokers that must extend the ends
-        int roomBelow = min - 1;                 // positions down to 1
-        int roomAbove = 13 - max;                // positions up to 13
-        if (leftover > roomBelow + roomAbove)
-            return SetEvaluation.Invalid;
-
-        // Extend upward first (higher value), then downward.
-        int extendUp = Math.Min(leftover, roomAbove);
-        int extendDown = leftover - extendUp;
-        int runStart = min - extendDown;
-        int runEnd = max + extendUp;
-
-        if (runEnd - runStart + 1 != tiles.Count)
-            return SetEvaluation.Invalid; // safety: block length must equal tile count
-
-        int value = SumRange(runStart, runEnd);
-        return new SetEvaluation(SetKind.Run, value);
+        return new SetEvaluation(SetKind.Run, SumRange(start, end));
     }
 
     private static int SumRange(int from, int to) => (from + to) * (to - from + 1) / 2;

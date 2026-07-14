@@ -65,10 +65,11 @@ public class RuleValidatorTests
     }
 
     [Fact]
-    public void Run_UnorderedInput_StillValid()
+    public void Run_OutOfSequenceInput_IsInvalid()
     {
+        // Runs are validated positionally, so tiles must be laid in order.
         var set = new[] { N(TileColor.Red, 11), N(TileColor.Red, 9), N(TileColor.Red, 10) };
-        Assert.Equal(SetKind.Run, RuleValidator.EvaluateSet(set).Kind);
+        Assert.False(RuleValidator.IsValidSet(set));
     }
 
     [Fact]
@@ -89,22 +90,29 @@ public class RuleValidatorTests
     }
 
     [Fact]
-    public void Run_JokerExtendsEnd()
+    public void Run_JokerBeforeTwelveThirteen_IsValidAsEleven()
     {
-        // 12,13,joker -> joker cannot go above 13, must extend downward to 11
-        var set = new[] { N(TileColor.Orange, 12), N(TileColor.Orange, 13), J() };
+        // joker,12,13 -> joker is 11 (to the left), a valid run
+        var set = new[] { J(), N(TileColor.Orange, 12), N(TileColor.Orange, 13) };
         var eval = RuleValidator.EvaluateSet(set);
         Assert.Equal(SetKind.Run, eval.Kind);
         Assert.Equal(36, eval.Value); // 11+12+13
     }
 
     [Fact]
-    public void Run_ExceedsThirteen_IsInvalid()
+    public void Run_JokerAfterThirteen_IsRejected()
     {
-        var set = new[] { N(TileColor.Red, 12), N(TileColor.Red, 13), J(), J() };
-        // 12,13 + 2 jokers would need 11..14 or 10..13; only downward fits: 10,11,12,13? that's 4 tiles 10-13
-        // Actually 12,13 + 2 jokers = length 4 => 10,11,12,13 valid.
-        Assert.True(RuleValidator.IsValidSet(set));
+        // 12,13,joker -> the joker would be a 14, which does not exist. Reject.
+        var set = new[] { N(TileColor.Orange, 12), N(TileColor.Orange, 13), J() };
+        Assert.False(RuleValidator.IsValidSet(set));
+    }
+
+    [Fact]
+    public void Run_JokerExtendingBelowOne_IsRejected()
+    {
+        // joker,1,2 -> the joker would be a 0. Reject.
+        var set = new[] { J(), N(TileColor.Blue, 1), N(TileColor.Blue, 2) };
+        Assert.False(RuleValidator.IsValidSet(set));
     }
 
     [Fact]

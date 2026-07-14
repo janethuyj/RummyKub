@@ -3,9 +3,8 @@ import {
   CollisionDetection,
   DndContext,
   DragEndEvent,
-  MouseSensor,
+  PointerSensor,
   pointerWithin,
-  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -31,12 +30,10 @@ export function GameTable() {
   const hintTileIds = useStore((s) => s.hintTileIds);
 
   const myTurn = isMyTurn(game);
-  // Mouse: drag after a small move. Touch: press-and-hold briefly, so quick
-  // swipes still scroll the page on mobile instead of grabbing a tile.
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 160, tolerance: 8 } }),
-  );
+  // One pointer sensor handles both mouse and touch. Dragging starts after an
+  // 8px move; `touch-action: none` on tiles lets a touch-drag work while the
+  // board still scrolls when you swipe on empty cells.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   function handleDragEnd(e: DragEndEvent) {
     if (!e.over) return;
@@ -93,6 +90,12 @@ export function GameTable() {
 
 function TopBar() {
   const game = useStore((s) => s.game)!;
+  const leave = useStore((s) => s.leave);
+
+  function exit() {
+    if (window.confirm('Leave this game and return to the lobby?')) leave();
+  }
+
   return (
     <div className="top-bar">
       <div className="players">
@@ -112,6 +115,9 @@ function TopBar() {
       <div className="top-right">
         <span className="draw-pile">Pool: {game.drawPileCount}</span>
         <TurnTimer />
+        <button className="btn tiny exit-btn" onClick={exit} title="Leave the game">
+          Exit
+        </button>
       </div>
     </div>
   );

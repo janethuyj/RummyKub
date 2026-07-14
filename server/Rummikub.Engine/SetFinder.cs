@@ -92,13 +92,20 @@ public static class SetFinder
 
     private static bool TryExtendExistingSet(List<List<Tile>> sets, Tile joker)
     {
+        // Insert the joker at whichever position keeps the set valid (runs are now
+        // order-sensitive, so a joker must go where its implied number is 1..13).
         foreach (var set in sets)
         {
-            var candidate = new List<Tile>(set) { joker };
-            if (RuleValidator.IsValidSet(candidate))
+            for (int pos = 0; pos <= set.Count; pos++)
             {
-                set.Add(joker);
-                return true;
+                var candidate = new List<Tile>(set);
+                candidate.Insert(pos, joker);
+                if (RuleValidator.IsValidSet(candidate))
+                {
+                    set.Clear();
+                    set.AddRange(candidate);
+                    return true;
+                }
             }
         }
         return false;
@@ -110,14 +117,21 @@ public static class SetFinder
         {
             for (int b = a + 1; b < remaining.Count; b++)
             {
-                var candidate = new List<Tile> { remaining[a], remaining[b], joker };
-                if (RuleValidator.IsValidSet(candidate))
+                // Try both orders of the pair and every joker position between them.
+                foreach (var pair in new[] { new[] { remaining[a], remaining[b] }, new[] { remaining[b], remaining[a] } })
                 {
-                    // Remove higher index first to keep positions valid.
-                    remaining.RemoveAt(b);
-                    remaining.RemoveAt(a);
-                    sets.Add(candidate);
-                    return true;
+                    for (int pos = 0; pos <= 2; pos++)
+                    {
+                        var candidate = new List<Tile>(pair);
+                        candidate.Insert(pos, joker);
+                        if (RuleValidator.IsValidSet(candidate))
+                        {
+                            remaining.RemoveAt(b); // higher index first
+                            remaining.RemoveAt(a);
+                            sets.Add(candidate);
+                            return true;
+                        }
+                    }
                 }
             }
         }

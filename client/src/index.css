@@ -121,6 +121,8 @@ input {
 .rack-count { opacity: 0.8; font-size: 12px; }
 .top-right { display: flex; align-items: center; gap: 14px; }
 .draw-pile { font-size: 13px; opacity: 0.85; }
+.exit-btn { background: rgba(200, 16, 46, 0.25); border-color: rgba(200, 16, 46, 0.5); }
+.exit-btn:hover:not(:disabled) { background: rgba(200, 16, 46, 0.4); }
 .turn-timer { font-weight: 700; padding: 4px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); }
 .turn-timer.urgent { background: var(--red); animation: pulse 1s infinite; }
 .turn-timer.off { opacity: 0.5; font-weight: 500; }

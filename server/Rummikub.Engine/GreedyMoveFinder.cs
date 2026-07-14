@@ -47,13 +47,17 @@ public sealed class GreedyMoveFinder : IMoveFinder
         {
             for (int i = 0; i < newBoard.Count; i++)
             {
-                var candidate = new List<Tile>(newBoard[i]) { tile };
-                if (RuleValidator.IsValidSet(candidate))
-                {
-                    newBoard[i] = candidate;
-                    playedIds.Add(tile.Id);
-                    break;
-                }
+                // A run is order-sensitive, so try attaching at the end and the start.
+                var appended = new List<Tile>(newBoard[i]) { tile };
+                var prepended = new List<Tile> { tile };
+                prepended.AddRange(newBoard[i]);
+
+                if (RuleValidator.IsValidSet(appended)) newBoard[i] = appended;
+                else if (RuleValidator.IsValidSet(prepended)) newBoard[i] = prepended;
+                else continue;
+
+                playedIds.Add(tile.Id);
+                break;
             }
         }
 
