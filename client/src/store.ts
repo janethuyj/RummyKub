@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import type { HubConnection } from '@microsoft/signalr';
 import type { GameState, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
-import { organizeRack } from './rummikub';
+import { findSets, organizeRack } from './rummikub';
+import { cloneGrid, findTileCell, Grid, gridToSets, layoutSetsToGrid } from './board';
 
 const STORAGE_KEY = 'rummykub.session';
 
 interface Working {
-  board: Tile[][];
+  grid: Grid;
   rack: Tile[];
 }
 
@@ -16,8 +17,8 @@ interface SavedSession {
   playerId: string;
 }
 
-/** Drop target: the rack, an existing set by index, or a brand-new set. */
-export type Container = 'rack' | 'new' | { setIndex: number };
+/** Drop target: back to the rack, or a specific board cell. */
+export type Container = 'rack' | { r: number; c: number };
 
 interface Store {
   connected: boolean;
@@ -41,6 +42,7 @@ interface Store {
 
   moveTile: (tileId: number, to: Container) => void;
   organize: () => void;
+  autoPlay: () => Promise<void>;
   undo: () => void;
   undoAll: () => void;
   toggleHint: () => void;
@@ -64,7 +66,7 @@ function saveSession(s: SavedSession) {
 }
 
 const clone = (w: Working): Working => ({
-  board: w.board.map((s) => [...s]),
+  grid: cloneGrid(w.grid),
   rack: [...w.rack],
 });
 
@@ -86,7 +88,7 @@ export const useStore = create<Store>((set, get) => ({
       const rack = get().autoOrganize ? organizeRack(state.yourRack) : [...state.yourRack];
       set({
         game: state,
-        working: { board: state.board.map((s) => [...s]), rack },
+        working: { grid: layoutSetsToGrid(state.board), rack },
         undoStack: [],
         hintTileIds: [],
       });
@@ -146,7 +148,7 @@ export const useStore = create<Store>((set, get) => ({
   commit: async () => {
     const { game, working } = get();
     if (!conn || !game || !working) return;
-    const board = working.board.filter((s) => s.length > 0).map((s) => s.map((t) => t.id));
+    const board = gridToSets(working.grid).map((s) => s.map((t) => t.id));
     const res = await hub.commitMove(conn, game.roomCode, board);
     if (!res.ok) set({ error: res.error }); // keep working state so the player can fix it
   },
@@ -173,26 +175,25 @@ export const useStore = create<Store>((set, get) => ({
     const { working, undoStack } = get();
     if (!working) return;
 
-    // Locate and detach the tile from wherever it currently is.
-    let moved: Tile | undefined;
-    const board = working.board.map((s) => s.filter((t) => (t.id === tileId ? ((moved = t), false) : true)));
-    let rack = working.rack.filter((t) => (t.id === tileId ? ((moved = t), false) : true));
+    // Dropping onto an occupied cell is a no-op (leave the tile where it is).
+    if (to !== 'rack' && working.grid[to.r]?.[to.c]) return;
+
+    // Find the tile in the rack or on the grid.
+    const fromRack = working.rack.find((t) => t.id === tileId);
+    const cell = fromRack ? null : findTileCell(working.grid, tileId);
+    const moved = fromRack ?? (cell ? working.grid[cell.r][cell.c]! : undefined);
     if (!moved) return;
 
-    if (to === 'rack') {
-      rack = [...rack, moved];
-    } else if (to === 'new') {
-      board.push([moved]);
-    } else {
-      const idx = to.setIndex;
-      if (idx >= 0 && idx < board.length) board[idx] = [...board[idx], moved];
-      else board.push([moved]);
-    }
+    const grid = cloneGrid(working.grid);
+    let rack = working.rack.filter((t) => t.id !== tileId);
+    if (cell) grid[cell.r][cell.c] = null;
 
-    const cleaned = board.filter((s) => s.length > 0);
+    if (to === 'rack') rack = [...rack, moved];
+    else grid[to.r][to.c] = moved;
+
     set({
       undoStack: [...undoStack, clone(working)],
-      working: { board: cleaned, rack },
+      working: { grid, rack },
       hintTileIds: [],
     });
   },
@@ -204,8 +205,27 @@ export const useStore = create<Store>((set, get) => ({
     set({
       autoOrganize: true,
       undoStack: [...undoStack, clone(working)],
-      working: { board: working.board, rack: organizeRack(working.rack) },
+      working: { grid: working.grid, rack: organizeRack(working.rack) },
     });
+  },
+
+  autoPlay: async () => {
+    const { working } = get();
+    if (!working) return;
+    // Find every complete set currently in hand, lay them on the board next to
+    // whatever is already there, and try to play them. The server enforces the
+    // 30-point first-meld rule, so if it's short the sets stay staged to adjust.
+    const { sets } = findSets(working.rack);
+    if (sets.length === 0) {
+      set({ error: 'No complete sets in your hand to play.' });
+      return;
+    }
+    const existing = gridToSets(working.grid);
+    const grid = layoutSetsToGrid([...existing, ...sets]);
+    const usedIds = new Set(sets.flat().map((t) => t.id));
+    const rack = working.rack.filter((t) => !usedIds.has(t.id));
+    set({ undoStack: [...get().undoStack, clone(working)], working: { grid, rack }, hintTileIds: [] });
+    await get().commit();
   },
 
   undo: () => {
@@ -216,10 +236,11 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   undoAll: () => {
-    const { game } = get();
+    const { game, autoOrganize } = get();
     if (!game) return;
+    const rack = autoOrganize ? organizeRack(game.yourRack) : [...game.yourRack];
     set({
-      working: { board: game.board.map((s) => [...s]), rack: [...game.yourRack] },
+      working: { grid: layoutSetsToGrid(game.board), rack },
       undoStack: [],
     });
   },

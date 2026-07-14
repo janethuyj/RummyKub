@@ -1,8 +1,10 @@
 import {
   closestCenter,
+  CollisionDetection,
   DndContext,
   DragEndEvent,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useDraggable,
   useDroppable,
@@ -10,9 +12,17 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { Tile } from '../types';
+import { BOARD_COLS, Cell } from '../board';
 import { isMyTurn, useStore } from '../store';
 import { TileView } from './TileView';
 import { TurnTimer } from './TurnTimer';
+
+// Prefer the cell directly under the pointer; fall back to the nearest droppable
+// so a slightly-off drop still lands somewhere sensible.
+const collision: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  return within.length > 0 ? within : closestCenter(args);
+};
 
 export function GameTable() {
   const game = useStore((s) => s.game)!;
@@ -32,12 +42,15 @@ export function GameTable() {
     if (!e.over) return;
     const tileId = Number(e.active.id);
     const target = String(e.over.id);
-    if (target === 'rack') moveTile(tileId, 'rack');
-    else if (target === 'board') moveTile(tileId, 'new'); // dropped on empty board area → new set
-    else if (target.startsWith('set-')) moveTile(tileId, { setIndex: Number(target.slice(4)) });
+    if (target === 'rack') {
+      moveTile(tileId, 'rack');
+    } else if (target.startsWith('cell-')) {
+      const [, r, c] = target.split('-');
+      moveTile(tileId, { r: Number(r), c: Number(c) });
+    }
   }
 
-  const board = working?.board ?? game.board;
+  const grid = working?.grid ?? [];
   const rack = working?.rack ?? game.yourRack;
   const hintSet = new Set(hintTileIds);
 
@@ -45,24 +58,23 @@ export function GameTable() {
     <div className="game-table">
       <TopBar />
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <DropZone id="board" className="board" aria-label="Board">
-          {board.length === 0 && (
-            <p className="board-empty">
-              {myTurn ? 'Drag tiles here to form a set.' : 'No sets on the board yet.'}
-            </p>
-          )}
-          {board.map((set, i) => (
-            <DropZone key={i} id={`set-${i}`} className="set">
-              {set.map((t) => (
-                <DraggableTile key={t.id} tile={t} disabled={!myTurn} highlighted={hintSet.has(t.id)} />
-              ))}
-            </DropZone>
-          ))}
-          {myTurn && board.length > 0 && (
-            <span className="new-set-hint">drop in open space = new set</span>
-          )}
-        </DropZone>
+      <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={handleDragEnd}>
+        <div className="board-scroll" aria-label="Board">
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, var(--cell-w))` }}>
+            {grid.map((row, r) =>
+              row.map((cell, c) => (
+                <BoardCell
+                  key={`${r}-${c}`}
+                  r={r}
+                  c={c}
+                  tile={cell}
+                  myTurn={myTurn}
+                  highlighted={!!cell && hintSet.has(cell.id)}
+                />
+              )),
+            )}
+          </div>
+        </div>
 
         <DropZone id="rack" className="rack" aria-label="Your rack">
           {rack.map((t) => (
@@ -70,6 +82,8 @@ export function GameTable() {
           ))}
         </DropZone>
       </DndContext>
+
+      {myTurn && <p className="board-caption">Drag tiles into the grid — leave a gap between sets.</p>}
 
       <Controls />
       {game.status === 'Finished' && <WinnerOverlay />}
@@ -107,6 +121,7 @@ function Controls() {
   const game = useStore((s) => s.game)!;
   const draw = useStore((s) => s.draw);
   const commit = useStore((s) => s.commit);
+  const autoPlay = useStore((s) => s.autoPlay);
   const undo = useStore((s) => s.undo);
   const undoAll = useStore((s) => s.undoAll);
   const organize = useStore((s) => s.organize);
@@ -125,6 +140,14 @@ function Controls() {
     <div className="controls">
       <button className="btn primary" disabled={!canCommit} onClick={() => void commit()}>
         Play {placedTiles > 0 ? `(${placedTiles})` : ''}
+      </button>
+      <button
+        className="btn"
+        disabled={!myTurn}
+        title="Lay every complete set from your hand onto the board and play them"
+        onClick={() => void autoPlay()}
+      >
+        ⚡ Auto-play
       </button>
       <button className="btn" disabled={!myTurn} onClick={() => void draw()}>
         Draw &amp; pass
@@ -173,6 +196,27 @@ function WinnerOverlay() {
 }
 
 // ---- dnd-kit wrappers ----
+
+function BoardCell({
+  r,
+  c,
+  tile,
+  myTurn,
+  highlighted,
+}: {
+  r: number;
+  c: number;
+  tile: Cell;
+  myTurn: boolean;
+  highlighted: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `cell-${r}-${c}` });
+  return (
+    <div ref={setNodeRef} className={`cell ${isOver ? 'over' : ''} ${tile ? 'filled' : ''}`}>
+      {tile && <DraggableTile tile={tile} disabled={!myTurn} highlighted={highlighted} />}
+    </div>
+  );
+}
 
 function DraggableTile({ tile, disabled, highlighted }: { tile: Tile; disabled: boolean; highlighted: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
