@@ -1,4 +1,5 @@
 import {
+  closestCenter,
   DndContext,
   DragEndEvent,
   PointerSensor,
@@ -26,7 +27,7 @@ export function GameTable() {
     const tileId = Number(e.active.id);
     const target = String(e.over.id);
     if (target === 'rack') moveTile(tileId, 'rack');
-    else if (target === 'new') moveTile(tileId, 'new');
+    else if (target === 'board') moveTile(tileId, 'new'); // dropped on empty board area → new set
     else if (target.startsWith('set-')) moveTile(tileId, { setIndex: Number(target.slice(4)) });
   }
 
@@ -38,9 +39,13 @@ export function GameTable() {
     <div className="game-table">
       <TopBar />
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <section className="board" aria-label="Board">
-          {board.length === 0 && <p className="board-empty">No sets on the board yet.</p>}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DropZone id="board" className="board" aria-label="Board">
+          {board.length === 0 && (
+            <p className="board-empty">
+              {myTurn ? 'Drag tiles here to form a set.' : 'No sets on the board yet.'}
+            </p>
+          )}
           {board.map((set, i) => (
             <DropZone key={i} id={`set-${i}`} className="set">
               {set.map((t) => (
@@ -48,12 +53,10 @@ export function GameTable() {
               ))}
             </DropZone>
           ))}
-          {myTurn && (
-            <DropZone id="new" className="set new-set">
-              <span className="new-set-hint">+ new set</span>
-            </DropZone>
+          {myTurn && board.length > 0 && (
+            <span className="new-set-hint">drop in open space = new set</span>
           )}
-        </section>
+        </DropZone>
 
         <DropZone id="rack" className="rack" aria-label="Your rack">
           {rack.map((t) => (

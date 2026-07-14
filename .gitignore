@@ -28,6 +28,11 @@ appsettings.Development.local.json
 # ---- Claude Code personal settings ----
 .claude/settings.local.json
 
+# ---- Playwright / test artifacts ----
+.playwright-mcp/
+*.png
+!client/public/**
+
 # ---- OS / editor ----
 .DS_Store
 Thumbs.db

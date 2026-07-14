@@ -139,11 +139,8 @@ input {
   border: 2px dashed transparent;
 }
 .set.over { border-color: var(--accent); background: rgba(255, 210, 87, 0.12); }
-.new-set {
-  min-width: 84px; align-items: center; justify-content: center;
-  border-color: rgba(255, 255, 255, 0.25);
-}
-.new-set-hint { font-size: 12px; opacity: 0.6; }
+.board.over { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 40px rgba(0, 0, 0, 0.3); }
+.new-set-hint { font-size: 12px; opacity: 0.5; align-self: center; margin-left: 8px; }
 
 /* Rack (wooden ledge) */
 .rack {
