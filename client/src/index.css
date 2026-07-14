@@ -172,7 +172,7 @@ input {
 /* Tiles */
 .tile-wrap { touch-action: none; cursor: grab; }
 .tile-wrap.locked { cursor: default; }
-.tile-wrap.is-dragging { opacity: 0.4; }
+.tile-wrap.is-dragging { opacity: 0.85; }
 .tile-wrap.selected { transform: translateY(-14px); z-index: 2; }
 .tile-wrap.selected .tile { outline: 3px solid var(--accent); box-shadow: 0 8px 10px rgba(0, 0, 0, 0.45); }
 .tile-wrap.just-drawn .tile { animation: draw-flash 2.6s ease-out; }
@@ -274,10 +274,12 @@ input {
   .game-table { height: 100%; max-height: 100%; min-height: 0; gap: 4px; }
   .board-caption { display: none; }
 
-  /* 21 columns + 20 one-pixel gaps fit within the viewport width. */
+  /* Size cells to the smaller of: fitting 21 columns across the width, or fitting
+     all 8 rows in the available height — so the whole board shows and tiles shrink
+     to fit more rows in landscape. */
   :root {
-    --cell-w: calc((100vw - 54px) / 21);
-    --cell-h: calc((100vw - 54px) / 21 * 1.32);
+    --cell-w: min(calc((100vw - 54px) / 21), calc((100dvh - 158px) / 8 / 1.32));
+    --cell-h: calc(var(--cell-w) * 1.32);
   }
   .grid { gap: 1px; }
   /* flex:1 with min-height:0 lets the board scroll internally so the rack and
@@ -286,7 +288,7 @@ input {
   .cell { border-radius: 4px; }
 
   .tile { width: var(--cell-w); height: var(--cell-h); border-radius: 4px; }
-  .tile-face { font-size: calc((100vw - 54px) / 21 * 0.5); }
+  .tile-face { font-size: calc(var(--cell-w) * 0.52); }
 
   .top-bar { gap: 5px; }
   .player-chip { padding: 2px 7px; font-size: 11px; }

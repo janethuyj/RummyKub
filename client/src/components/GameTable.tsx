@@ -11,8 +11,9 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import type { Tile } from '../types';
-import { BOARD_COLS, Cell } from '../board';
+import { BOARD_COLS, Cell, gridToSets } from '../board';
 import { isMyTurn, useStore } from '../store';
 import { TileView } from './TileView';
 import { TurnTimer } from './TurnTimer';
@@ -164,7 +165,13 @@ function Controls() {
   const selectedIds = useStore((s) => s.selectedIds);
 
   const myTurn = isMyTurn(game);
-  const placedTiles = working ? game.yourRack.length - working.rack.length : 0;
+  // Count tiles actually added to the board (on the grid but not in the committed
+  // board) — the same thing the server checks — so Play never enables when the
+  // server would reject with "you must place at least one tile".
+  const committedIds = new Set(game.board.flat().map((t) => t.id));
+  const placedTiles = working
+    ? gridToSets(working.grid).flat().filter((t) => !committedIds.has(t.id)).length
+    : 0;
   const canCommit = myTurn && placedTiles > 0;
   const hasSelection = selectedIds.length > 0;
 
@@ -276,13 +283,19 @@ function DraggableTile({
   justDrawn?: boolean;
   onSelect?: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: String(tile.id),
     disabled,
   });
+  // Follow the pointer while dragging (and float above other tiles) so it is clear
+  // where the tile will land.
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform), zIndex: 20 }
+    : undefined;
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...listeners}
       {...attributes}
       onClick={onSelect}

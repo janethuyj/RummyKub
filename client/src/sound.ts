@@ -15,7 +15,7 @@ export function unlockAudio(): void {
   if (c && c.state === 'suspended') void c.resume();
 }
 
-function beep(freq: number, durationMs: number, type: OscillatorType, gain = 0.06): void {
+function beep(freq: number, durationMs: number, type: OscillatorType, gain = 0.14): void {
   const c = audio();
   if (!c || c.state !== 'running') return;
   const osc = c.createOscillator();
@@ -39,5 +39,5 @@ export function playTilePlayed(): void {
 
 /** A soft low tap when a tile is drawn. */
 export function playTileDrawn(): void {
-  beep(300, 90, 'sine', 0.05);
+  beep(300, 100, 'sine', 0.12);
 }

@@ -4,7 +4,7 @@ import type { GameState, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
 import { findSets, organizeRack } from './rummikub';
 import { cloneGrid, findTileCell, Grid, gridToSets, placeSetByDefault, reconcileGrid } from './board';
-import { playTileDrawn, playTilePlayed } from './sound';
+import { playTileDrawn, playTilePlayed, unlockAudio } from './sound';
 
 const boardTileCount = (board: Tile[][]) => board.reduce((n, s) => n + s.length, 0);
 
@@ -224,8 +224,13 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   moveTile: (tileId, to) => {
-    const { working, undoStack } = get();
+    const { working, undoStack, game } = get();
     if (!working) return;
+
+    // Committed board tiles stay on the board — you rearrange them there, you don't
+    // take them back into your hand. This prevents accidentally "removing" a board
+    // tile by dropping it on the rack. (Tiles you placed this turn can still return.)
+    if (to === 'rack' && game && game.board.some((s) => s.some((t) => t.id === tileId))) return;
 
     // Dropping onto an occupied cell is a no-op (leave the tile where it is).
     if (to !== 'rack' && working.grid[to.r]?.[to.c]) return;
@@ -319,7 +324,17 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   toggleHint: () => set((s) => ({ hintEnabled: !s.hintEnabled, hintTileIds: [] })),
-  toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
+  toggleSound: () =>
+    set((s) => {
+      const soundEnabled = !s.soundEnabled;
+      // Turning sound on inside this click gesture unlocks audio and plays a cue,
+      // so the player immediately confirms it works.
+      if (soundEnabled) {
+        unlockAudio();
+        playTilePlayed();
+      }
+      return { soundEnabled };
+    }),
   clearError: () => set({ error: null }),
   leave: () => {
     localStorage.removeItem(STORAGE_KEY);
