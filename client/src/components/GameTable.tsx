@@ -2,7 +2,8 @@ import {
   closestCenter,
   DndContext,
   DragEndEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -20,7 +21,12 @@ export function GameTable() {
   const hintTileIds = useStore((s) => s.hintTileIds);
 
   const myTurn = isMyTurn(game);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Mouse: drag after a small move. Touch: press-and-hold briefly, so quick
+  // swipes still scroll the page on mobile instead of grabbing a tile.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 160, tolerance: 8 } }),
+  );
 
   function handleDragEnd(e: DragEndEvent) {
     if (!e.over) return;
@@ -107,6 +113,7 @@ function Controls() {
   const requestHint = useStore((s) => s.requestHint);
   const toggleHint = useStore((s) => s.toggleHint);
   const hintEnabled = useStore((s) => s.hintEnabled);
+  const autoOrganize = useStore((s) => s.autoOrganize);
   const working = useStore((s) => s.working);
   const undoStack = useStore((s) => s.undoStack);
 
@@ -128,8 +135,12 @@ function Controls() {
       <button className="btn" disabled={undoStack.length === 0} onClick={undoAll}>
         Undo all
       </button>
-      <button className="btn" onClick={organize}>
-        Auto-organize
+      <button
+        className={`btn ${autoOrganize ? 'active' : ''}`}
+        title={autoOrganize ? 'Keeping your rack organized after each draw' : 'Group valid sets and sort your rack'}
+        onClick={organize}
+      >
+        Auto-organize{autoOrganize ? ' ✓' : ''}
       </button>
       {hintEnabled && (
         <button className="btn" disabled={!myTurn} onClick={() => void requestHint()}>

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { HubConnection } from '@microsoft/signalr';
 import type { GameState, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
+import { organizeRack } from './rummikub';
 
 const STORAGE_KEY = 'rummykub.session';
 
@@ -26,6 +27,7 @@ interface Store {
   error: string | null;
   hintEnabled: boolean;
   hintTileIds: number[];
+  autoOrganize: boolean;
 
   connect: () => Promise<void>;
   createRoom: (name: string) => Promise<void>;
@@ -44,19 +46,6 @@ interface Store {
   toggleHint: () => void;
   clearError: () => void;
   leave: () => void;
-}
-
-const COLOR_ORDER: Record<string, number> = { red: 0, orange: 1, blue: 2, black: 3 };
-
-/** Sort a rack by colour then number, jokers last — a simple cosmetic organize. */
-function sortRack(rack: Tile[]): Tile[] {
-  return [...rack].sort((a, b) => {
-    if (a.isJoker !== b.isJoker) return a.isJoker ? 1 : -1;
-    if (a.isJoker) return 0;
-    const ca = COLOR_ORDER[a.color ?? ''] ?? 9;
-    const cb = COLOR_ORDER[b.color ?? ''] ?? 9;
-    return ca !== cb ? ca - cb : a.number - b.number;
-  });
 }
 
 let conn: HubConnection | null = null;
@@ -87,14 +76,17 @@ export const useStore = create<Store>((set, get) => ({
   error: null,
   hintEnabled: true,
   hintTileIds: [],
+  autoOrganize: false,
 
   connect: async () => {
     conn = getConnection((state: GameState) => {
       // Every broadcast is server truth: reset the per-turn working copy and
-      // clear the undo history (undo is scoped to the current turn).
+      // clear the undo history (undo is scoped to the current turn). If the
+      // player enabled auto-organize, keep the rack organized across draws.
+      const rack = get().autoOrganize ? organizeRack(state.yourRack) : [...state.yourRack];
       set({
         game: state,
-        working: { board: state.board.map((s) => [...s]), rack: [...state.yourRack] },
+        working: { board: state.board.map((s) => [...s]), rack },
         undoStack: [],
         hintTileIds: [],
       });
@@ -208,9 +200,11 @@ export const useStore = create<Store>((set, get) => ({
   organize: () => {
     const { working, undoStack } = get();
     if (!working) return;
+    // Turn on sticky auto-organize so the rack stays organized after future draws.
     set({
+      autoOrganize: true,
       undoStack: [...undoStack, clone(working)],
-      working: { board: working.board, rack: sortRack(working.rack) },
+      working: { board: working.board, rack: organizeRack(working.rack) },
     });
   },
 
@@ -234,7 +228,7 @@ export const useStore = create<Store>((set, get) => ({
   clearError: () => set({ error: null }),
   leave: () => {
     localStorage.removeItem(STORAGE_KEY);
-    set({ game: null, working: null, undoStack: [], hintTileIds: [] });
+    set({ game: null, working: null, undoStack: [], hintTileIds: [], autoOrganize: false });
   },
 }));
 
