@@ -201,12 +201,13 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   organize: () => {
-    const { working, undoStack } = get();
+    const { working } = get();
     if (!working) return;
-    // Turn on sticky auto-organize so the rack stays organized after future draws.
+    // Auto-organize only reorders the rack (cosmetic), so it is not an undoable
+    // move — leave the undo stack untouched. Turn on sticky auto-organize so the
+    // rack stays organized after future draws.
     set({
       autoOrganize: true,
-      undoStack: [...undoStack, clone(working)],
       working: { grid: working.grid, rack: organizeRack(working.rack) },
     });
   },
