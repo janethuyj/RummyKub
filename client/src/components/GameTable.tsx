@@ -65,38 +65,40 @@ export function GameTable() {
       <TopBar />
 
       <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={handleDragEnd}>
-        <div className="board-scroll" aria-label="Board">
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, var(--cell-w))` }}>
-            {grid.map((row, r) =>
-              row.map((cell, c) => (
-                <BoardCell
-                  key={`${r}-${c}`}
-                  r={r}
-                  c={c}
-                  tile={cell}
-                  myTurn={myTurn}
-                  highlighted={!!cell && hintSet.has(cell.id)}
-                />
-              )),
-            )}
+        <div className="play-area">
+          <div className="board-scroll" aria-label="Board">
+            <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, var(--cell-w))` }}>
+              {grid.map((row, r) =>
+                row.map((cell, c) => (
+                  <BoardCell
+                    key={`${r}-${c}`}
+                    r={r}
+                    c={c}
+                    tile={cell}
+                    myTurn={myTurn}
+                    highlighted={!!cell && hintSet.has(cell.id)}
+                  />
+                )),
+              )}
+            </div>
           </div>
-        </div>
 
-        <DropZone id="rack" className="rack" aria-label="Your rack">
-          {rack.map((t, i) => (
-            <Fragment key={t.id}>
-              {gapSet.has(i) && <span className="rack-gap" aria-hidden="true" />}
-              <DraggableTile
-                tile={t}
-                disabled={!myTurn}
-                highlighted={hintSet.has(t.id)}
-                selected={selectedSet.has(t.id)}
-                justDrawn={drawnSet.has(t.id)}
-                onSelect={myTurn ? () => toggleSelect(t.id) : undefined}
-              />
-            </Fragment>
-          ))}
-        </DropZone>
+          <DropZone id="rack" className="rack" aria-label="Your rack">
+            {rack.map((t, i) => (
+              <Fragment key={t.id}>
+                {gapSet.has(i) && <span className="rack-gap" aria-hidden="true" />}
+                <DraggableTile
+                  tile={t}
+                  disabled={!myTurn}
+                  highlighted={hintSet.has(t.id)}
+                  selected={selectedSet.has(t.id)}
+                  justDrawn={drawnSet.has(t.id)}
+                  onSelect={myTurn ? () => toggleSelect(t.id) : undefined}
+                />
+              </Fragment>
+            ))}
+          </DropZone>
+        </div>
       </DndContext>
 
       {myTurn && (

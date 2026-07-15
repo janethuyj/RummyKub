@@ -28,7 +28,7 @@ body {
 
 button { -webkit-tap-highlight-color: transparent; }
 
-.app { display: flex; flex-direction: column; min-height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
 .app-header {
   padding: 10px 18px;
@@ -38,7 +38,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .logo { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
 
-.app-main { flex: 1; display: flex; flex-direction: column; padding: 16px; gap: 14px; }
+.app-main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; gap: 14px; overflow: auto; }
 
 .status-line { text-align: center; opacity: 0.8; }
 
@@ -109,19 +109,46 @@ input {
 .host-buttons { display: flex; gap: 10px; }
 
 /* ---- Game table ---- */
-.game-table { display: flex; flex-direction: column; gap: 12px; flex: 1; }
-.top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-.players { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Board + rack on the left; player info and controls in a right-hand side panel.
+   The board area gets all the space; the panel is a fixed-width column. */
+.game-table {
+  --side-w: 172px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side-w);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "play info"
+    "play controls";
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.play-area { grid-area: play; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.top-bar {
+  grid-area: info;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  overflow: hidden;
+}
+.players { display: flex; flex-direction: column; gap: 6px; }
+.top-right { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+
+.controls {
+  grid-area: controls;
+  display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+  gap: 6px; padding: 0; overflow-y: auto;
+}
+.controls .btn { width: 100%; }
+.board-caption { display: none; }
 .player-chip {
   display: flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 20px;
+  padding: 6px 12px; border-radius: 12px;
   background: rgba(0, 0, 0, 0.3); border: 2px solid transparent; font-size: 13px;
 }
 .player-chip.active { border-color: var(--accent); background: rgba(255, 210, 87, 0.18); }
 .player-chip.offline { opacity: 0.45; }
-.rack-count { opacity: 0.8; font-size: 12px; }
-.top-right { display: flex; align-items: center; gap: 14px; }
-.draw-pile { font-size: 13px; opacity: 0.85; }
+.rack-count { opacity: 0.8; font-size: 12px; margin-left: auto; }
+.draw-pile { font-size: 13px; opacity: 0.85; text-align: center; }
 .exit-btn { background: rgba(200, 16, 46, 0.25); border-color: rgba(200, 16, 46, 0.5); }
 .exit-btn:hover:not(:disabled) { background: rgba(200, 16, 46, 0.4); }
 .turn-timer { font-weight: 700; padding: 4px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); }
@@ -133,8 +160,8 @@ input {
 :root { --cell-w: 40px; --cell-h: 52px; }
 
 .board-scroll {
-  flex: 1;
-  min-height: 140px;
+  flex: 1 1 0;
+  min-height: 0;
   overflow: auto;
   background: rgba(0, 0, 0, 0.22);
   border-radius: 14px;
@@ -201,8 +228,7 @@ input {
 .tile.hint { outline: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent); }
 
 /* Controls */
-.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 4px 0; }
-.hint-toggle { display: flex; align-items: center; gap: 5px; font-size: 13px; opacity: 0.85; margin-left: auto; }
+.hint-toggle { display: flex; align-items: center; gap: 5px; font-size: 13px; opacity: 0.85; justify-content: center; padding-top: 2px; }
 
 /* Overlay / winner */
 .overlay {
@@ -220,39 +246,31 @@ input {
   font-size: 14px; z-index: 50;
 }
 
-/* Keep the game within the viewport so the rack + controls stay reachable. */
-.game-table { max-height: calc(100vh - 60px); }
-
 @media (max-width: 640px) {
-  /* Fit the whole game in one mobile screen; the board scrolls internally.
-     100dvh tracks the dynamic viewport so mobile browser chrome is accounted for. */
-  .app { min-height: 100dvh; }
-  .app-main { padding: 6px; gap: 6px; height: calc(100dvh - 42px); }
-  .game-table { max-height: 100%; gap: 6px; }
-
+  .app-main { padding: 6px; gap: 6px; }
   .app-header { padding: 6px 12px; }
   .logo { font-size: 16px; }
 
-  .top-bar { gap: 5px; }
-  .player-chip { padding: 3px 8px; font-size: 11px; }
-  .top-right { gap: 6px; }
+  .game-table { --side-w: 104px; gap: 6px; }
+  .play-area { gap: 6px; }
+
+  .player-chip { padding: 4px 7px; font-size: 11px; flex-wrap: wrap; border-radius: 10px; }
+  .rack-count { font-size: 10px; }
   .draw-pile { font-size: 11px; }
-  .turn-timer { padding: 3px 8px; font-size: 12px; }
-  .btn.tiny { padding: 4px 8px; }
+  .turn-timer { padding: 3px 6px; font-size: 12px; }
 
   :root { --cell-w: 28px; --cell-h: 38px; }
-  .board-scroll { min-height: 76px; padding: 6px; border-radius: 10px; }
+  .board-scroll { padding: 6px; border-radius: 10px; }
   .grid { gap: 3px; }
   .rack { padding: 7px; gap: 3px; border-radius: 10px; }
   .rack-gap { width: 12px; }
 
   .tile { width: 28px; height: 38px; border-radius: 5px; }
   .tile-face { font-size: 16px; }
-  .board-caption { font-size: 11px; }
 
   .controls { gap: 5px; }
-  .controls .btn { padding: 8px 9px; font-size: 12px; flex: 1 1 auto; }
-  .hint-toggle { margin-left: 0; flex: 1 1 100%; justify-content: center; padding-top: 2px; }
+  .controls .btn { padding: 7px 5px; font-size: 11px; }
+  .hint-toggle { font-size: 11px; }
 
   .card { margin: 12px auto; padding: 16px; }
   .room-code { font-size: 22px; letter-spacing: 4px; }
@@ -260,41 +278,36 @@ input {
 }
 
 @media (max-width: 380px) {
+  .game-table { --side-w: 92px; }
   :root { --cell-w: 25px; --cell-h: 34px; }
   .tile { width: 25px; height: 34px; }
   .tile-face { font-size: 14px; }
+  .controls .btn { padding: 6px 4px; font-size: 10px; }
 }
 
-/* Short/wide viewports (phones in landscape, small windows): size cells so ALL
-   21 columns fit the width — no horizontal scroll — and drop chrome for height. */
+/* Short/wide viewports (phones in landscape, small windows): drop the app header
+   and, because the side panel now holds the header + controls, the board area has
+   the full height — so tiles can be larger while still fitting all 8 rows and 21
+   columns. */
 @media (max-height: 540px) {
-  .app { height: 100dvh; min-height: 0; overflow: hidden; }
   .app-header { display: none; }
-  .app-main { height: 100dvh; min-height: 0; padding: 4px; gap: 4px; }
-  .game-table { height: 100%; max-height: 100%; min-height: 0; gap: 4px; }
-  .board-caption { display: none; }
+  .app-main { padding: 4px; gap: 4px; }
+  .game-table { --side-w: 148px; gap: 6px; }
+  .play-area { gap: 5px; }
 
-  /* Size cells to the smaller of: fitting 21 columns across the width, or fitting
-     all 8 rows in the available height — so the whole board shows and tiles shrink
-     to fit more rows in landscape. */
   :root {
-    --cell-w: min(calc((100vw - 54px) / 21), calc((100dvh - 158px) / 8 / 1.32));
+    --cell-w: min(calc((100vw - 196px) / 21), calc((100dvh - 70px) / 8 / 1.32));
     --cell-h: calc(var(--cell-w) * 1.32);
   }
   .grid { gap: 1px; }
-  /* flex:1 with min-height:0 lets the board scroll internally so the rack and
-     controls below it stay visible instead of being pushed off-screen. */
-  .board-scroll { flex: 1 1 0; min-height: 0; overflow: auto; overflow-x: hidden; padding: 4px; }
+  .board-scroll { overflow-x: hidden; padding: 5px; }
   .cell { border-radius: 4px; }
-
   .tile { width: var(--cell-w); height: var(--cell-h); border-radius: 4px; }
   .tile-face { font-size: calc(var(--cell-w) * 0.52); }
 
-  .top-bar { gap: 5px; }
-  .player-chip { padding: 2px 7px; font-size: 11px; }
-  .rack { padding: 4px; gap: 2px; }
+  .player-chip { padding: 3px 7px; font-size: 11px; }
+  .rack { padding: 5px; gap: 3px; }
   .rack-gap { width: 8px; }
   .controls { gap: 4px; }
   .controls .btn { padding: 6px 8px; font-size: 12px; }
-  .hint-toggle { flex-basis: auto; }
 }
