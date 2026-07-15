@@ -124,10 +124,13 @@ export function reconcileGrid(prevGrid: Grid | null, serverSets: Tile[][]): Grid
       const rows = new Set(positions.map((p) => p!.r));
       const cols = positions.map((p) => p!.c).sort((a, b) => a - b);
       const contiguous = cols.every((c, i) => i === 0 || c === cols[i - 1] + 1);
-      const free = positions.every((p) => grid[p!.r][p!.c] === null);
+      // The previous grid may have grown past the default row count, so a remembered
+      // row can be outside the fresh grid — treat any not-yet-existing cell as free.
+      const free = positions.every((p) => (grid[p!.r]?.[p!.c] ?? null) === null);
       if (rows.size === 1 && contiguous && free) {
         for (const t of set) {
           const p = prev.get(t.id)!;
+          while (p.r >= grid.length) grid.push(Array<Cell>(BOARD_COLS).fill(null));
           grid[p.r][p.c] = t;
         }
         kept = true;
