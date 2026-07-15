@@ -86,15 +86,23 @@ function setColumns(set: Tile[]): { tile: Tile; col: number }[] {
   return placements;
 }
 
-/** Place one set into the first fully-empty row using the default convention. */
+/**
+ * Place one set by the default convention, packing it into the first row whose
+ * target columns are free — so a left-aligned group and a number-axis run can
+ * share a row and the board stays within its 8 rows. Only grows as a last resort.
+ */
 export function placeSetByDefault(grid: Grid, set: Tile[]): void {
   if (set.length === 0) return;
-  let r = grid.findIndex((row) => row.every((cell) => cell === null));
-  if (r === -1) {
-    grid.push(Array<Cell>(BOARD_COLS).fill(null));
-    r = grid.length - 1;
+  const placements = setColumns(set);
+  for (let r = 0; r < grid.length; r++) {
+    if (placements.every((p) => grid[r][p.col] === null)) {
+      for (const { tile, col } of placements) grid[r][col] = tile;
+      return;
+    }
   }
-  for (const { tile, col } of setColumns(set)) grid[r][col] = tile;
+  grid.push(Array<Cell>(BOARD_COLS).fill(null));
+  const r = grid.length - 1;
+  for (const { tile, col } of placements) grid[r][col] = tile;
 }
 
 /** Fresh layout of all sets by the default convention (used when there is no prior grid). */
@@ -124,13 +132,11 @@ export function reconcileGrid(prevGrid: Grid | null, serverSets: Tile[][]): Grid
       const rows = new Set(positions.map((p) => p!.r));
       const cols = positions.map((p) => p!.c).sort((a, b) => a - b);
       const contiguous = cols.every((c, i) => i === 0 || c === cols[i - 1] + 1);
-      // The previous grid may have grown past the default row count, so a remembered
-      // row can be outside the fresh grid — treat any not-yet-existing cell as free.
-      const free = positions.every((p) => (grid[p!.r]?.[p!.c] ?? null) === null);
+      const withinRows = positions.every((p) => p!.r < BOARD_ROWS);
+      const free = withinRows && positions.every((p) => grid[p!.r][p!.c] === null);
       if (rows.size === 1 && contiguous && free) {
         for (const t of set) {
           const p = prev.get(t.id)!;
-          while (p.r >= grid.length) grid.push(Array<Cell>(BOARD_COLS).fill(null));
           grid[p.r][p.c] = t;
         }
         kept = true;
