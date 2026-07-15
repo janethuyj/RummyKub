@@ -53,3 +53,8 @@ export interface HintResult {
   suggestedTileIds: number[];
   suggestedBoard: number[][] | null;
 }
+
+export interface MovePreview {
+  playerId: string;
+  board: Tile[][];
+}

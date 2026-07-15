@@ -44,6 +44,11 @@ export const hub = {
     c.invoke<ActionResult>('AddAiPlayer', code),
   startGame: (c: signalR.HubConnection, code: string) =>
     c.invoke<ActionResult>('StartGame', code),
+  playAgain: (c: signalR.HubConnection, code: string) =>
+    c.invoke<ActionResult>('PlayAgain', code),
+  previewMove: (c: signalR.HubConnection, code: string, board: number[][]) =>
+    c.send('PreviewMove', code, board), // fire-and-forget, throttled from the client
+
   drawTile: (c: signalR.HubConnection, code: string) =>
     c.invoke<ActionResult>('DrawTile', code),
   commitMove: (c: signalR.HubConnection, code: string, board: number[][]) =>

@@ -30,6 +30,12 @@ public sealed class GameHub : Hub
     public Task<ActionResultDto> StartGame(string code) =>
         _coordinator.StartGameAsync(Context.ConnectionId, code);
 
+    public Task<ActionResultDto> PlayAgain(string code) =>
+        _coordinator.PlayAgainAsync(Context.ConnectionId, code);
+
+    public Task PreviewMove(string code, List<List<int>> board) =>
+        _coordinator.PreviewMoveAsync(Context.ConnectionId, code, board);
+
     public Task<ActionResultDto> DrawTile(string code) =>
         _coordinator.DrawAsync(Context.ConnectionId, code);
 

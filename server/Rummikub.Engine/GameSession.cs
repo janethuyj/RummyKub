@@ -84,6 +84,15 @@ public sealed class GameSession
         return ActionResult.Success;
     }
 
+    /// <summary>Re-deal and start a fresh round with the same players (after a win).</summary>
+    public ActionResult Restart(Random rng)
+    {
+        if (Status != GameStatus.Finished)
+            return ActionResult.Fail("Can only start a new game once the round has finished.");
+        Status = GameStatus.Lobby;
+        return Start(rng);
+    }
+
     // ---- Turn actions ----
 
     /// <summary>Draw one tile (if any remain) and pass the turn.</summary>

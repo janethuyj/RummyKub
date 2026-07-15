@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { HubConnection } from '@microsoft/signalr';
-import type { GameState, Tile } from './types';
+import type { GameState, MovePreview, Tile } from './types';
 import { ensureStarted, getConnection, hub } from './signalr';
 import { findSets, organizeRack } from './rummikub';
 import { cloneGrid, findTileCell, Grid, gridToSets, placeSetByDefault, reconcileGrid } from './board';
@@ -36,12 +36,14 @@ interface Store {
   selectedIds: number[];
   justDrawnIds: number[];
   soundEnabled: boolean;
+  preview: MovePreview | null;
 
   connect: () => Promise<void>;
   createRoom: (name: string) => Promise<void>;
   joinRoom: (code: string, name: string) => Promise<void>;
   addAi: () => Promise<void>;
   startGame: () => Promise<void>;
+  playAgain: () => Promise<void>;
   draw: () => Promise<void>;
   commit: () => Promise<void>;
   requestHint: () => Promise<void>;
@@ -79,6 +81,20 @@ const clone = (w: Working): Working => ({
   rack: [...w.rack],
 });
 
+// Throttle broadcasting the in-progress board so other players see it live.
+let previewTimer: ReturnType<typeof setTimeout> | null = null;
+function queuePreview(get: () => Store) {
+  if (previewTimer) return;
+  previewTimer = setTimeout(() => {
+    previewTimer = null;
+    const { game, working } = get();
+    if (conn && game && working && isMyTurn(game)) {
+      const board = gridToSets(working.grid).map((s) => s.map((t) => t.id));
+      void hub.previewMove(conn, game.roomCode, board);
+    }
+  }, 150);
+}
+
 export const useStore = create<Store>((set, get) => ({
   connected: false,
   game: null,
@@ -92,6 +108,7 @@ export const useStore = create<Store>((set, get) => ({
   selectedIds: [],
   justDrawnIds: [],
   soundEnabled: true,
+  preview: null,
 
   connect: async () => {
     conn = getConnection((state: GameState) => {
@@ -134,8 +151,12 @@ export const useStore = create<Store>((set, get) => ({
         rackGaps: org ? org.gaps : [],
         selectedIds: [],
         justDrawnIds,
+        preview: null, // committed state supersedes any live preview
       });
     });
+
+    // Live preview of another player's in-progress arrangement.
+    conn.on('MovePreview', (payload: MovePreview) => set({ preview: payload }));
 
     // After an automatic reconnect the server sees a NEW connection id, so we
     // must re-bind our seat or we stop receiving broadcasts (the "had to refresh"
@@ -187,6 +208,13 @@ export const useStore = create<Store>((set, get) => ({
     const { game } = get();
     if (!conn || !game) return;
     const res = await hub.startGame(conn, game.roomCode);
+    if (!res.ok) set({ error: res.error });
+  },
+
+  playAgain: async () => {
+    const { game } = get();
+    if (!conn || !game) return;
+    const res = await hub.playAgain(conn, game.roomCode);
     if (!res.ok) set({ error: res.error });
   },
 
@@ -255,6 +283,7 @@ export const useStore = create<Store>((set, get) => ({
       rackGaps: [], // manual rearranging drops the organized grouping
       selectedIds: [],
     });
+    queuePreview(get);
   },
 
   organize: () => {
@@ -298,6 +327,7 @@ export const useStore = create<Store>((set, get) => ({
       rackGaps: [],
       selectedIds: [],
     });
+    queuePreview(get);
   },
 
   toggleSelect: (tileId) => {
@@ -313,6 +343,7 @@ export const useStore = create<Store>((set, get) => ({
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
     set({ working: clone(prev), undoStack: undoStack.slice(0, -1), selectedIds: [] });
+    queuePreview(get);
   },
 
   undoAll: () => {
@@ -321,6 +352,7 @@ export const useStore = create<Store>((set, get) => ({
     const { undoStack } = get();
     if (undoStack.length === 0) return;
     set({ working: clone(undoStack[0]), undoStack: [], selectedIds: [] });
+    queuePreview(get);
   },
 
   toggleHint: () => set((s) => ({ hintEnabled: !s.hintEnabled, hintTileIds: [] })),
@@ -340,7 +372,7 @@ export const useStore = create<Store>((set, get) => ({
     localStorage.removeItem(STORAGE_KEY);
     set({
       game: null, working: null, undoStack: [], hintTileIds: [], autoOrganize: false,
-      rackGaps: [], selectedIds: [], justDrawnIds: [],
+      rackGaps: [], selectedIds: [], justDrawnIds: [], preview: null,
     });
   },
 }));

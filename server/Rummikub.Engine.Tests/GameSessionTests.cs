@@ -14,6 +14,38 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void Restart_WhileStillPlaying_IsRejected()
+    {
+        var game = TwoPlayerGame(); // status Playing
+        Assert.False(game.Restart(new Random(1)).Ok);
+    }
+
+    [Fact]
+    public void Restart_AfterFinish_DealsAgainAndResetsMeld()
+    {
+        var game = TwoPlayerGame();
+        var p1 = game.Players.First(p => p.Id == "p1"); // p1 goes first
+
+        // Give p1 exactly one valid 30-point set so committing it empties the rack and wins.
+        p1.Rack.Clear();
+        p1.Rack.Add(Tile.Numbered(200, TileColor.Blue, 12));
+        p1.Rack.Add(Tile.Numbered(201, TileColor.Red, 12));
+        p1.Rack.Add(Tile.Numbered(202, TileColor.Black, 12));
+
+        var win = game.CommitMove("p1", new List<IReadOnlyList<int>> { new List<int> { 200, 201, 202 } });
+        Assert.True(win.Ok, win.Error);
+        Assert.Equal(GameStatus.Finished, game.Status);
+        Assert.Equal("p1", game.WinnerId);
+
+        var restart = game.Restart(new Random(7));
+        Assert.True(restart.Ok, restart.Error);
+        Assert.Equal(GameStatus.Playing, game.Status);
+        Assert.Null(game.WinnerId);
+        Assert.All(game.Players, p => Assert.Equal(GameSession.StartingRackSize, p.Rack.Count));
+        Assert.All(game.Players, p => Assert.False(p.HasMadeInitialMeld));
+    }
+
+    [Fact]
     public void Start_DealsFourteenTilesEach()
     {
         var game = TwoPlayerGame();

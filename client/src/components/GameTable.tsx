@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import type { Tile } from '../types';
-import { BOARD_COLS, Cell, gridToSets } from '../board';
+import { BOARD_COLS, Cell, gridToSets, layoutSetsToGrid } from '../board';
 import { isMyTurn, useStore } from '../store';
 import { TileView } from './TileView';
 import { TurnTimer } from './TurnTimer';
@@ -34,8 +34,14 @@ export function GameTable() {
   const selectedIds = useStore((s) => s.selectedIds);
   const justDrawnIds = useStore((s) => s.justDrawnIds);
   const toggleSelect = useStore((s) => s.toggleSelect);
+  const preview = useStore((s) => s.preview);
 
   const myTurn = isMyTurn(game);
+  // When it is someone else's turn, show their live in-progress arrangement.
+  const showPreview = !myTurn && preview !== null && preview.playerId === game.currentPlayerId;
+  const previewName = showPreview
+    ? game.players.find((p) => p.id === preview!.playerId)?.name
+    : undefined;
   // One pointer sensor handles both mouse and touch. Dragging starts after an
   // 8px move; `touch-action: none` on tiles lets a touch-drag work while the
   // board still scrolls when you swipe on empty cells.
@@ -53,7 +59,7 @@ export function GameTable() {
     }
   }
 
-  const grid = working?.grid ?? [];
+  const grid = showPreview ? layoutSetsToGrid(preview!.board) : working?.grid ?? [];
   const rack = working?.rack ?? game.yourRack;
   const hintSet = new Set(hintTileIds);
   const gapSet = new Set(rackGaps);
@@ -66,7 +72,8 @@ export function GameTable() {
 
       <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={handleDragEnd}>
         <div className="play-area">
-          <div className="board-scroll" aria-label="Board">
+          <div className={`board-scroll ${showPreview ? 'previewing' : ''}`} aria-label="Board">
+            {showPreview && <div className="preview-banner">👀 {previewName} is arranging…</div>}
             <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, var(--cell-w))` }}>
               {grid.map((row, r) =>
                 row.map((cell, c) => (
@@ -237,15 +244,26 @@ function Controls() {
 function WinnerOverlay() {
   const game = useStore((s) => s.game)!;
   const leave = useStore((s) => s.leave);
+  const playAgain = useStore((s) => s.playAgain);
   const winner = game.players.find((p) => p.id === game.winnerId);
   const youWon = game.winnerId === game.yourPlayerId;
+  const isHost = game.players.find((p) => p.id === game.yourPlayerId)?.isHost ?? false;
   return (
     <div className="overlay">
       <div className="card winner-card">
         <h2>{youWon ? '🎉 You win!' : `${winner?.name ?? 'Someone'} wins!`}</h2>
-        <button className="btn primary" onClick={leave}>
-          Back to lobby
-        </button>
+        <div className="winner-actions">
+          {isHost ? (
+            <button className="btn primary" onClick={() => void playAgain()}>
+              Play again
+            </button>
+          ) : (
+            <p className="hint-text">Waiting for the host to start a new game…</p>
+          )}
+          <button className="btn" onClick={leave}>
+            Back to lobby
+          </button>
+        </div>
       </div>
     </div>
   );

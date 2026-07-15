@@ -43,3 +43,6 @@ public sealed record ActionResultDto(bool Ok, string? Error)
 
 /// <summary>A hint for the human player: either draw, or a suggested set of tile ids to play.</summary>
 public sealed record HintDto(bool ShouldDraw, IReadOnlyList<int> SuggestedTileIds, IReadOnlyList<IReadOnlyList<int>>? SuggestedBoard);
+
+/// <summary>Live view of the current player's in-progress board (before they commit).</summary>
+public sealed record MovePreviewDto(string PlayerId, IReadOnlyList<IReadOnlyList<TileDto>> Board);

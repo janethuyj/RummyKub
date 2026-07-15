@@ -115,6 +115,67 @@ public sealed class GameCoordinator
         return ActionResultDto.From(result);
     }
 
+    public async Task<ActionResultDto> PlayAgainAsync(string connectionId, string code)
+    {
+        var room = _store.Get(code);
+        if (room is null) return new ActionResultDto(false, "Room not found.");
+
+        ActionResult result;
+        await room.Gate.WaitAsync();
+        try
+        {
+            if (room.PlayerIdForConnection(connectionId) != room.HostId)
+                return new ActionResultDto(false, "Only the host can start a new game.");
+            result = room.Session.Restart(new Random());
+        }
+        finally { room.Gate.Release(); }
+
+        if (result.Ok) await AfterTurnAsync(room);
+        return ActionResultDto.From(result);
+    }
+
+    /// <summary>
+    /// Relay the current player's in-progress board to the other players so they can
+    /// watch tiles being arranged before Play. Not applied to the session.
+    /// </summary>
+    public async Task PreviewMoveAsync(string connectionId, string code, IReadOnlyList<IReadOnlyList<int>> board)
+    {
+        var room = _store.Get(code);
+        if (room is null) return;
+
+        MovePreviewDto? payload = null;
+        var targets = new List<string>();
+        await room.Gate.WaitAsync();
+        try
+        {
+            var senderId = room.PlayerIdForConnection(connectionId);
+            if (senderId is null || room.Session.CurrentPlayer?.Id != senderId)
+                return; // only the player whose turn it is may preview
+
+            var player = room.Session.Players.First(p => p.Id == senderId);
+            var known = room.Session.Board.SelectMany(s => s).Concat(player.Rack).ToDictionary(t => t.Id);
+
+            var sets = new List<IReadOnlyList<TileDto>>();
+            foreach (var set in board)
+            {
+                var tiles = set.Where(known.ContainsKey).Select(id => TileDto.From(known[id])).ToList();
+                if (tiles.Count > 0) sets.Add(tiles);
+            }
+            payload = new MovePreviewDto(senderId, sets);
+
+            foreach (var p in room.Session.Players)
+            {
+                if (p.Id == senderId) continue;
+                var conn = room.ConnectionFor(p.Id);
+                if (conn is not null) targets.Add(conn);
+            }
+        }
+        finally { room.Gate.Release(); }
+
+        foreach (var conn in targets)
+            await _hub.Clients.Client(conn).SendAsync("MovePreview", payload);
+    }
+
     public async Task<ActionResultDto> StartGameAsync(string connectionId, string code)
     {
         var room = _store.Get(code);

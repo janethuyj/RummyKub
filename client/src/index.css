@@ -243,6 +243,17 @@ input {
 }
 .winner-card { text-align: center; }
 .winner-card h2 { font-size: 28px; }
+.winner-actions { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+
+/* Live preview of another player's arrangement */
+.board-scroll.previewing { outline: 2px solid rgba(255, 210, 87, 0.5); position: relative; }
+.board-scroll.previewing .grid { opacity: 0.9; }
+.preview-banner {
+  position: sticky; top: 0; left: 0; z-index: 5;
+  display: inline-block; margin-bottom: 6px;
+  background: rgba(255, 210, 87, 0.9); color: #3a2c00;
+  font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 8px;
+}
 
 /* Toast */
 .toast {
