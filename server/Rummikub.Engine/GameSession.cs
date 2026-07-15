@@ -28,6 +28,7 @@ public sealed class GameSession
     private readonly List<Player> _players = new();
     private readonly List<List<Tile>> _board = new();
     private readonly List<Tile> _drawPile = new();
+    private int _consecutivePasses; // forced passes (empty pool) since the last play
 
     public IReadOnlyList<Player> Players => _players;
     public IReadOnlyList<IReadOnlyList<Tile>> Board => _board;
@@ -80,6 +81,7 @@ public sealed class GameSession
 
         CurrentPlayerIndex = 0;
         WinnerId = null;
+        _consecutivePasses = 0;
         Status = GameStatus.Playing;
         return ActionResult.Success;
     }
@@ -103,11 +105,30 @@ public sealed class GameSession
 
         var tile = DrawTile();
         if (tile is not null)
+        {
             CurrentPlayer!.Rack.Add(tile);
+            _consecutivePasses = 0; // drew a tile — the game is still progressing
+        }
+        else
+        {
+            _consecutivePasses++; // forced pass: the pool is empty
+        }
 
         AdvanceTurn();
+
+        // If the pool is empty and every player has passed in turn, the game is
+        // deadlocked. End it; the player with the lowest hand value wins.
+        if (Status == GameStatus.Playing && _consecutivePasses >= _players.Count)
+        {
+            Status = GameStatus.Finished;
+            WinnerId = _players.OrderBy(HandValue).First().Id;
+        }
+
         return ActionResult.Success;
     }
+
+    /// <summary>Sum of a rack's tile values (jokers count as 30) — lower is better.</summary>
+    private static int HandValue(Player p) => p.Rack.Sum(t => t.IsJoker ? 30 : t.Number);
 
     /// <summary>
     /// Commit a rearranged board expressed as tile ids. Ids are resolved against the
@@ -152,6 +173,7 @@ public sealed class GameSession
         _board.AddRange(proposedBoard.Select(s => s.ToList()));
         player.Rack.RemoveAll(t => playedIds.Contains(t.Id));
         player.HasMadeInitialMeld = true;
+        _consecutivePasses = 0; // a play breaks any deadlock
 
         if (player.Rack.Count == 0)
         {

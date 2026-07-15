@@ -248,10 +248,13 @@ function WinnerOverlay() {
   const winner = game.players.find((p) => p.id === game.winnerId);
   const youWon = game.winnerId === game.yourPlayerId;
   const isHost = game.players.find((p) => p.id === game.yourPlayerId)?.isHost ?? false;
+  // If nobody emptied their rack, the round ended because the pool ran out.
+  const poolRanOut = game.players.every((p) => p.rackCount > 0);
   return (
     <div className="overlay">
       <div className="card winner-card">
         <h2>{youWon ? '🎉 You win!' : `${winner?.name ?? 'Someone'} wins!`}</h2>
+        {poolRanOut && <p className="hint-text">The pool ran out — fewest tiles wins.</p>}
         <div className="winner-actions">
           {isHost ? (
             <button className="btn primary" onClick={() => void playAgain()}>

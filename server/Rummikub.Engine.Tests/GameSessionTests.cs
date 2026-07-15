@@ -46,6 +46,29 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void EmptyPool_AllPass_EndsWithLowestHandWinner()
+    {
+        var game = new GameSession();
+        game.AddPlayer("p1", "Alice", false);
+        game.AddPlayer("p2", "Bob", false);
+        game.Start(new Random(3));
+
+        // Drain the pool by drawing and passing until it is empty.
+        int guard = 0;
+        while (game.DrawPileCount > 0 && guard++ < 200)
+            game.DrawAndPass(game.CurrentPlayer!.Id);
+
+        Assert.Equal(GameStatus.Playing, game.Status); // still going, pool just emptied
+
+        // Now every player forced-passes; after a full round the game ends.
+        game.DrawAndPass(game.CurrentPlayer!.Id);
+        game.DrawAndPass(game.CurrentPlayer!.Id);
+
+        Assert.Equal(GameStatus.Finished, game.Status);
+        Assert.NotNull(game.WinnerId); // lowest-hand player wins
+    }
+
+    [Fact]
     public void Start_DealsFourteenTilesEach()
     {
         var game = TwoPlayerGame();
