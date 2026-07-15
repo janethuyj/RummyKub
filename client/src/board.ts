@@ -86,10 +86,30 @@ function setColumns(set: Tile[]): { tile: Tile; col: number }[] {
   return placements;
 }
 
+// Preferred rows for a single-colour run, so same-colour runs group together.
+const RUN_ROWS: Record<string, number[]> = {
+  red: [0, 1],
+  blue: [2, 3],
+  orange: [4, 5],
+  black: [6, 7],
+};
+
+/** The row search order for a set: a single-colour run prefers its colour's rows. */
+function rowOrder(set: Tile[], rowCount: number): number[] {
+  const all = Array.from({ length: rowCount }, (_, i) => i);
+  const nonJokers = set.filter((t) => !t.isJoker);
+  const isGroup = nonJokers.length === 0 || nonJokers.every((t) => t.number === nonJokers[0].number);
+  if (isGroup) return all;
+
+  const preferred = (RUN_ROWS[nonJokers[0].color ?? ''] ?? []).filter((r) => r < rowCount);
+  return [...preferred, ...all.filter((r) => !preferred.includes(r))];
+}
+
 /**
- * Place one set by the default convention, packing it into the first row whose
- * target columns are free — so a left-aligned group and a number-axis run can
- * share a row and the board stays within its 8 rows. Only grows as a last resort.
+ * Place one set by the default convention, packing it into the first suitable row
+ * whose target columns are free — so a left-aligned group and a number-axis run can
+ * share a row and the board stays within its 8 rows. Single-colour runs prefer
+ * their colour's rows. Only grows as a last resort.
  */
 export function placeSetByDefault(grid: Grid, set: Tile[]): void {
   if (set.length === 0) return;
@@ -106,7 +126,7 @@ export function placeSetByDefault(grid: Grid, set: Tile[]): void {
     return true;
   };
 
-  for (let r = 0; r < grid.length; r++) {
+  for (const r of rowOrder(set, grid.length)) {
     if (fits(r)) {
       for (const { tile, col } of placements) grid[r][col] = tile;
       return;
