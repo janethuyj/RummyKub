@@ -246,43 +246,50 @@ input {
   font-size: 14px; z-index: 50;
 }
 
-@media (max-width: 640px) {
+/* Portrait phones: too narrow for a side column, so stack the panel below the
+   board (header on top, controls at the bottom) and give the board the full width. */
+@media (max-width: 640px) and (orientation: portrait) {
   .app-main { padding: 6px; gap: 6px; }
   .app-header { padding: 6px 12px; }
   .logo { font-size: 16px; }
 
-  .game-table { --side-w: 104px; gap: 6px; }
-  .play-area { gap: 6px; }
+  .game-table { display: flex; flex-direction: column; gap: 6px; }
+  .play-area { order: 2; flex: 1; gap: 6px; }
+  .top-bar {
+    order: 1; flex-direction: row; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 6px; overflow: visible;
+  }
+  .players { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .top-right { flex-direction: row; align-items: center; gap: 8px; }
+  .controls {
+    order: 3; flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: 5px; overflow: visible;
+  }
+  .controls .btn { width: auto; flex: 1 1 auto; padding: 8px 9px; font-size: 12px; }
+  .hint-toggle { flex: 1 1 100%; justify-content: center; font-size: 12px; }
 
-  .player-chip { padding: 4px 7px; font-size: 11px; flex-wrap: wrap; border-radius: 10px; }
-  .rack-count { font-size: 10px; }
-  .draw-pile { font-size: 11px; }
-  .turn-timer { padding: 3px 6px; font-size: 12px; }
+  .player-chip { padding: 4px 8px; font-size: 11px; }
+  .rack-count { margin-left: 4px; font-size: 10px; }
+  .draw-pile { font-size: 12px; }
+  .turn-timer { padding: 3px 8px; font-size: 12px; }
 
   :root { --cell-w: 28px; --cell-h: 38px; }
   .board-scroll { padding: 6px; border-radius: 10px; }
   .grid { gap: 3px; }
   .rack { padding: 7px; gap: 3px; border-radius: 10px; }
   .rack-gap { width: 12px; }
-
   .tile { width: 28px; height: 38px; border-radius: 5px; }
   .tile-face { font-size: 16px; }
-
-  .controls { gap: 5px; }
-  .controls .btn { padding: 7px 5px; font-size: 11px; }
-  .hint-toggle { font-size: 11px; }
 
   .card { margin: 12px auto; padding: 16px; }
   .room-code { font-size: 22px; letter-spacing: 4px; }
   .code-input { letter-spacing: 2px; }
 }
 
-@media (max-width: 380px) {
-  .game-table { --side-w: 92px; }
+@media (max-width: 380px) and (orientation: portrait) {
   :root { --cell-w: 25px; --cell-h: 34px; }
   .tile { width: 25px; height: 34px; }
   .tile-face { font-size: 14px; }
-  .controls .btn { padding: 6px 4px; font-size: 10px; }
 }
 
 /* Short/wide viewports (phones in landscape, small windows): drop the app header
