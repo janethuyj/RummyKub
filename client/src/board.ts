@@ -94,8 +94,20 @@ function setColumns(set: Tile[]): { tile: Tile; col: number }[] {
 export function placeSetByDefault(grid: Grid, set: Tile[]): void {
   if (set.length === 0) return;
   const placements = setColumns(set);
+  const cols = placements.map((p) => p.col);
+  // Require a one-column gap on each side so adjacent sets on the same row stay
+  // separate (e.g. a run ending at column 11 and one starting at 12 must not touch,
+  // or they'd read as a single mixed set).
+  const lo = Math.max(0, Math.min(...cols) - 1);
+  const hi = Math.min(BOARD_COLS - 1, Math.max(...cols) + 1);
+
+  const fits = (r: number) => {
+    for (let c = lo; c <= hi; c++) if (grid[r][c] !== null) return false;
+    return true;
+  };
+
   for (let r = 0; r < grid.length; r++) {
-    if (placements.every((p) => grid[r][p.col] === null)) {
+    if (fits(r)) {
       for (const { tile, col } of placements) grid[r][col] = tile;
       return;
     }
