@@ -115,11 +115,6 @@ export function GameTable() {
 
 function TopBar() {
   const game = useStore((s) => s.game)!;
-  const leave = useStore((s) => s.leave);
-
-  function exit() {
-    if (window.confirm('Leave this game and return to the lobby?')) leave();
-  }
 
   return (
     <div className="top-bar">
@@ -140,9 +135,6 @@ function TopBar() {
       <div className="top-right">
         <span className="draw-pile">Pool: {game.drawPileCount}</span>
         <TurnTimer />
-        <button className="btn tiny exit-btn" onClick={exit} title="Leave the game">
-          Exit
-        </button>
       </div>
     </div>
   );
@@ -165,6 +157,7 @@ function Controls() {
   const working = useStore((s) => s.working);
   const undoStack = useStore((s) => s.undoStack);
   const selectedIds = useStore((s) => s.selectedIds);
+  const leave = useStore((s) => s.leave);
 
   const myTurn = isMyTurn(game);
   // Count tiles actually added to the board (on the grid but not in the committed
@@ -197,12 +190,14 @@ function Controls() {
       <button className="btn" disabled={!myTurn} onClick={() => void draw()}>
         Draw &amp; pass
       </button>
-      <button className="btn" disabled={undoStack.length === 0} onClick={undo}>
-        Undo
-      </button>
-      <button className="btn" disabled={undoStack.length === 0} onClick={undoAll}>
-        Undo all
-      </button>
+      <div className="undo-row">
+        <button className="btn" disabled={undoStack.length === 0} onClick={undo}>
+          Undo
+        </button>
+        <button className="btn" disabled={undoStack.length === 0} onClick={undoAll}>
+          Undo all
+        </button>
+      </div>
       <button
         className={`btn ${autoOrganize ? 'active' : ''}`}
         title={autoOrganize ? 'Keeping your rack organized after each draw' : 'Group valid sets and sort your rack'}
@@ -226,6 +221,15 @@ function Controls() {
         <input type="checkbox" checked={hintEnabled} onChange={toggleHint} />
         Hints
       </label>
+      <button
+        className="btn exit-btn"
+        title="Leave the game"
+        onClick={() => {
+          if (window.confirm('Leave this game and return to the lobby?')) leave();
+        }}
+      >
+        Exit
+      </button>
     </div>
   );
 }
