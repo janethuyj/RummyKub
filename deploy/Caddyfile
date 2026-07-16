@@ -1,8 +1,38 @@
-# Caddy reverse proxy: terminates HTTPS (automatic Let's Encrypt certificate)
-# and forwards to the app container. WebSocket upgrades (SignalR) pass through
-# automatically — no extra config needed.
+# Two ways in:
 #
-# DNS: create an A record for rummykub.helleon.com -> your VM's public IP.
-rummykub.helleon.com {
-    reverse_proxy app:8080
+#   1. Internally, by IP:      http://10.1.1.16   (plain HTTP — see note)
+#   2. Externally, by name:    https://rummykub.helleon.com  (auto HTTPS)
+#
+# Both reverse-proxy to the app container on the compose network. WebSocket
+# upgrades (SignalR) pass through automatically.
+#
+# Why the IP is HTTP-only: Let's Encrypt will not issue a certificate for a bare
+# IP address (let alone a private 10.x one), so there is no public cert to serve
+# there. Browsers on the LAN load the page over http:// and SignalR runs over
+# ws:// on the same origin — which works fine. If you want HTTPS on the LAN too,
+# see the `tls internal` note at the bottom.
+
+# --- Internal access by IP (LAN) ---
+http://10.1.1.16 {
+	reverse_proxy app:8080
 }
+
+# --- External access by hostname ---
+# Requires: an A record  rummykub.helleon.com -> <your public IP>, and your
+# router forwarding public ports 80 AND 443 to this host's 80/443. Caddy needs
+# them to complete the Let's Encrypt challenge (HTTP-01 on 80, TLS-ALPN-01 on
+# 443) and to serve traffic. Forwarding a non-standard external port will break
+# certificate issuance.
+rummykub.helleon.com {
+	reverse_proxy app:8080
+}
+
+# --- Optional: HTTPS on the LAN too ---
+# Replace the `http://10.1.1.16` block above with the version below to have Caddy
+# serve its own internally-signed cert. Browsers will warn until you install
+# Caddy's root CA (it prints the path in the logs) on each client machine.
+#
+#   10.1.1.16 {
+#   	tls internal
+#   	reverse_proxy app:8080
+#   }
