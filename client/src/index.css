@@ -230,7 +230,9 @@ input {
 .tile.blue .tile-face { color: var(--blue); }
 .tile.black .tile-face { color: var(--black); }
 .tile.orange .tile-face { color: var(--orange); }
-.tile.joker .tile-face { color: var(--red); }
+/* The two jokers are told apart the way a real set does: one red, one black. */
+.tile.joker.red .tile-face { color: var(--red); }
+.tile.joker.black .tile-face { color: var(--black); }
 .tile.hint { outline: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent); }
 
 /* Controls */

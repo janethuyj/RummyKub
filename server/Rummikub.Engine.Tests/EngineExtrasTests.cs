@@ -7,6 +7,7 @@ public class EngineExtrasTests
     private static int _nextId = 9000;
     private static Tile N(TileColor c, int n) => Tile.Numbered(_nextId++, c, n);
     private static Tile J() => Tile.Joker(_nextId++);
+    private static Tile J(TileColor c) => Tile.Joker(_nextId++, c);
     private static IReadOnlyList<IReadOnlyList<Tile>> EmptyBoard => Array.Empty<IReadOnlyList<Tile>>();
 
     // ---- SetFinder / RackOrganizer ----
@@ -85,6 +86,29 @@ public class EngineExtrasTests
         var rack = new List<Tile> { N(TileColor.Red, 1), N(TileColor.Blue, 2), N(TileColor.Black, 8) };
         var hint = new HintService(new OptimalMoveFinder()).GetHint(EmptyBoard, rack, hasMelded: false);
         Assert.True(hint.ShouldDraw);
+    }
+
+    // ---- Jokers ----
+
+    [Fact]
+    public void TilePool_HasOneRedAndOneBlackJoker()
+    {
+        var jokers = TilePool.BuildOrdered().Where(t => t.IsJoker).ToList();
+        Assert.Equal(2, jokers.Count);
+        Assert.Contains(jokers, j => j.Color == TileColor.Red);
+        Assert.Contains(jokers, j => j.Color == TileColor.Black);
+    }
+
+    [Fact]
+    public void JokerColourIsDecorativeAndTheRulesIgnoreIt()
+    {
+        // A black joker still stands in for the red 12 in a red run...
+        var run = new List<Tile> { N(TileColor.Red, 11), J(TileColor.Black), N(TileColor.Red, 13) };
+        Assert.True(RuleValidator.IsValidSet(run));
+
+        // ...and a red joker completes a group that already contains a red tile.
+        var group = new List<Tile> { N(TileColor.Red, 7), N(TileColor.Blue, 7), J(TileColor.Red) };
+        Assert.True(RuleValidator.IsValidSet(group));
     }
 
     // ---- TurnHistory ----

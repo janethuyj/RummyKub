@@ -2,11 +2,20 @@ using Rummikub.Engine;
 
 namespace Rummikub.Server.Contracts;
 
-/// <summary>A tile as sent to the client. Colour is null for jokers.</summary>
-public sealed record TileDto(int Id, string? Color, int Number, bool IsJoker)
+/// <summary>
+/// A tile as sent to the client. <see cref="Color"/> is the colour the rules go by and is
+/// null for jokers, which have no colour of their own. <see cref="JokerColor"/> is set only
+/// for jokers and only says which of the two printed jokers it is, so the UI can tell them
+/// apart; it is kept out of <see cref="Color"/> so it can never be mistaken for a real colour.
+/// </summary>
+public sealed record TileDto(int Id, string? Color, int Number, bool IsJoker, string? JokerColor)
 {
     public static TileDto From(Tile t) =>
-        new(t.Id, t.IsJoker ? null : t.Color.ToString().ToLowerInvariant(), t.IsJoker ? 0 : t.Number, t.IsJoker);
+        new(t.Id,
+            t.IsJoker ? null : t.Color.ToString().ToLowerInvariant(),
+            t.IsJoker ? 0 : t.Number,
+            t.IsJoker,
+            t.IsJoker ? t.Color.ToString().ToLowerInvariant() : null);
 }
 
 /// <summary>Public info about a player (never exposes another player's tiles).</summary>
