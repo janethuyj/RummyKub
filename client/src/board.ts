@@ -10,6 +10,13 @@ export const BOARD_COLS = 21;
 export const BOARD_ROWS = 8;
 const RUN_ANCHOR = BOARD_COLS - 1 - 13; // 7 -> number 1 at col 8, number 13 at col 20
 
+// Groups live to the left of the run axis, and two fit side by side on one row: the
+// first left-aligned, the second starting at column 5 — clear of a 4-tile first group
+// (columns 0..3), with column 4 blank between them, and up against the run axis at
+// column 8. A table full of same-number melds fills these second slots instead of
+// growing the board, which is fixed at BOARD_ROWS rows.
+const GROUP_STARTS = [0, 5];
+
 export type Cell = Tile | null;
 export type Grid = Cell[][];
 
@@ -54,18 +61,22 @@ export function gridPositions(grid: Grid): Map<number, { r: number; c: number }>
   return map;
 }
 
-/** Where each tile in a set goes by the default convention (group left / run number-axis). */
-function setColumns(set: Tile[]): { tile: Tile; col: number }[] {
+function isGroupSet(set: Tile[]): boolean {
   const nonJokers = set.filter((t) => !t.isJoker);
-  const isGroup = nonJokers.length === 0 || nonJokers.every((t) => t.number === nonJokers[0].number);
+  return nonJokers.length === 0 || nonJokers.every((t) => t.number === nonJokers[0].number);
+}
 
-  if (isGroup) {
-    // Same-number group: left-aligned in columns 0..L-1.
-    return set.map((tile, i) => ({ tile, col: i }));
-  }
+/**
+ * A set's tiles in the left-to-right order they must sit in, plus the columns its first
+ * tile would like to start at, best first. A group has two candidate slots; a run has
+ * one, fixed by its numbers.
+ */
+function setLayout(set: Tile[]): { ordered: Tile[]; starts: number[] } {
+  if (isGroupSet(set)) return { ordered: set, starts: GROUP_STARTS };
 
-  // Run: place each tile at the column matching its number (13 -> last column),
-  // with jokers filling the interior/extension numbers.
+  // Run: each tile sits at the column matching its number (13 -> last column), with
+  // jokers filling the interior/extension numbers.
+  const nonJokers = set.filter((t) => !t.isJoker);
   const numbers = nonJokers.map((t) => t.number).sort((a, b) => a - b);
   const length = set.length;
   let start = numbers[0];
@@ -78,12 +89,28 @@ function setColumns(set: Tile[]): { tile: Tile; col: number }[] {
   for (const t of nonJokers) byNumber.set(t.number, t);
   const jokers = set.filter((t) => t.isJoker);
 
-  const placements: { tile: Tile; col: number }[] = [];
-  for (let n = start; n <= end; n++) {
-    const tile = byNumber.get(n) ?? jokers.pop()!;
-    placements.push({ tile, col: RUN_ANCHOR + n });
-  }
-  return placements;
+  const ordered: Tile[] = [];
+  for (let n = start; n <= end; n++) ordered.push(byNumber.get(n) ?? jokers.pop()!);
+  return { ordered, starts: [RUN_ANCHOR + start] };
+}
+
+/**
+ * True when `length` tiles can start at `start` on row `r`. Requires a blank column on
+ * each side, so that a set never touches its neighbour — contiguous cells read as one
+ * set, so two touching sets would merge into a single invalid one.
+ */
+function spanFree(grid: Grid, r: number, start: number, length: number): boolean {
+  if (start < 0 || start + length > BOARD_COLS) return false;
+  const lo = Math.max(0, start - 1);
+  const hi = Math.min(BOARD_COLS - 1, start + length);
+  for (let c = lo; c <= hi; c++) if (grid[r][c] !== null) return false;
+  return true;
+}
+
+function write(grid: Grid, r: number, start: number, ordered: Tile[]): void {
+  ordered.forEach((tile, i) => {
+    grid[r][start + i] = tile;
+  });
 }
 
 // Preferred rows for a single-colour run, so same-colour runs group together.
@@ -97,44 +124,65 @@ const RUN_ROWS: Record<string, number[]> = {
 /** The row search order for a set: a single-colour run prefers its colour's rows. */
 function rowOrder(set: Tile[], rowCount: number): number[] {
   const all = Array.from({ length: rowCount }, (_, i) => i);
-  const nonJokers = set.filter((t) => !t.isJoker);
-  const isGroup = nonJokers.length === 0 || nonJokers.every((t) => t.number === nonJokers[0].number);
-  if (isGroup) return all;
+  if (isGroupSet(set)) return all;
 
+  const nonJokers = set.filter((t) => !t.isJoker);
   const preferred = (RUN_ROWS[nonJokers[0].color ?? ''] ?? []).filter((r) => r < rowCount);
   return [...preferred, ...all.filter((r) => !preferred.includes(r))];
 }
 
+/** How many blank columns sit immediately to the left of `start` on row `r`. */
+function gapToLeft(grid: Grid, r: number, start: number): number {
+  let blanks = 0;
+  for (let c = start - 1; c >= 0 && grid[r][c] === null; c--) blanks++;
+  return blanks;
+}
+
 /**
- * Place one set by the default convention, packing it into the first suitable row
- * whose target columns are free — so a left-aligned group and a number-axis run can
- * share a row and the board stays within its 8 rows. Single-colour runs prefer
- * their colour's rows. Only grows as a last resort.
+ * Rows to try for a second group, widest breathing room first. Beside a 3-tile group the
+ * newcomer gets two blank columns (3 and 4); beside a 4-tile one it gets only column 4
+ * and the two read as though they were crowded together. Prefer the roomier row and fall
+ * back to the tight one only when nothing better is free.
  */
-export function placeSetByDefault(grid: Grid, set: Tile[]): void {
-  if (set.length === 0) return;
-  const placements = setColumns(set);
-  const cols = placements.map((p) => p.col);
-  // Require a one-column gap on each side so adjacent sets on the same row stay
-  // separate (e.g. a run ending at column 11 and one starting at 12 must not touch,
-  // or they'd read as a single mixed set).
-  const lo = Math.max(0, Math.min(...cols) - 1);
-  const hi = Math.min(BOARD_COLS - 1, Math.max(...cols) + 1);
+function roomiestFirst(grid: Grid, rows: number[], start: number): number[] {
+  // Sort is stable, so rows with equal room keep their original preference order.
+  return [...rows].sort((a, b) => gapToLeft(grid, b, start) - gapToLeft(grid, a, start));
+}
 
-  const fits = (r: number) => {
-    for (let c = lo; c <= hi; c++) if (grid[r][c] !== null) return false;
-    return true;
-  };
+/**
+ * Place one set, packing it into the first row where it fits — so a left-aligned group
+ * and a number-axis run can share a row. Single-colour runs prefer their colour's rows.
+ * The convention is tried first (each group slot in turn, left slot across every row
+ * before the column-5 slot); if every slot is taken the set goes wherever there is room,
+ * because showing it out of convention beats not showing it at all.
+ *
+ * The board never grows: it stays at BOARD_ROWS rows. Returns false if the set would not
+ * fit anywhere, which leaves the caller responsible for not dropping its tiles.
+ */
+export function placeSetByDefault(grid: Grid, set: Tile[]): boolean {
+  if (set.length === 0) return true;
+  const { ordered, starts } = setLayout(set);
 
-  for (const r of rowOrder(set, grid.length)) {
-    if (fits(r)) {
-      for (const { tile, col } of placements) grid[r][col] = tile;
-      return;
+  for (const start of starts) {
+    let rows = rowOrder(set, grid.length).filter((r) => spanFree(grid, r, start, ordered.length));
+    // Only the second group slot has a neighbour to its left worth keeping clear of.
+    // Runs keep their colour's row order untouched.
+    if (start > 0 && isGroupSet(set)) rows = roomiestFirst(grid, rows, start);
+    if (rows.length > 0) {
+      write(grid, rows[0], start, ordered);
+      return true;
     }
   }
-  grid.push(Array<Cell>(BOARD_COLS).fill(null));
-  const r = grid.length - 1;
-  for (const { tile, col } of placements) grid[r][col] = tile;
+
+  for (let r = 0; r < grid.length; r++) {
+    for (let start = 0; start + ordered.length <= BOARD_COLS; start++) {
+      if (spanFree(grid, r, start, ordered.length)) {
+        write(grid, r, start, ordered);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** Fresh layout of all sets by the default convention (used when there is no prior grid). */
@@ -177,6 +225,11 @@ export function reconcileGrid(prevGrid: Grid | null, serverSets: Tile[][]): Grid
     if (!kept) toAutoPlace.push(set);
   }
 
-  for (const set of toAutoPlace) placeSetByDefault(grid, set);
-  return grid;
+  let placedAll = true;
+  for (const set of toAutoPlace) if (!placeSetByDefault(grid, set)) placedAll = false;
+
+  // Holding tiles at their old positions can fragment the board enough to leave a set
+  // with nowhere to go. A clean re-layout defragments, at the cost of moving tiles the
+  // player had positioned — better than dropping a set off the board entirely.
+  return placedAll ? grid : layoutSetsToGrid(serverSets);
 }

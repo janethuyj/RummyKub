@@ -7,6 +7,7 @@ public class EngineExtrasTests
     private static int _nextId = 9000;
     private static Tile N(TileColor c, int n) => Tile.Numbered(_nextId++, c, n);
     private static Tile J() => Tile.Joker(_nextId++);
+    private static Tile J(TileColor c) => Tile.Joker(_nextId++, c);
     private static IReadOnlyList<IReadOnlyList<Tile>> EmptyBoard => Array.Empty<IReadOnlyList<Tile>>();
 
     // ---- SetFinder / RackOrganizer ----
@@ -49,32 +50,32 @@ public class EngineExtrasTests
                      organized.Ordered.Select(t => t.Id).OrderBy(x => x));
     }
 
-    // ---- GreedyMoveFinder / HintService ----
+    // ---- OptimalMoveFinder / HintService ----
 
     [Fact]
-    public void Greedy_PreMeld_PlaysWhenReaching30()
+    public void MoveFinder_PreMeld_PlaysWhenReaching30()
     {
         var rack = new List<Tile> { N(TileColor.Red, 10), N(TileColor.Blue, 10), N(TileColor.Black, 10) };
-        var move = new GreedyMoveFinder().FindMove(EmptyBoard, rack, hasMelded: false);
+        var move = new OptimalMoveFinder().FindMove(EmptyBoard, rack, hasMelded: false);
         Assert.NotNull(move);
         Assert.Equal(3, move!.PlayedTileIds.Count);
     }
 
     [Fact]
-    public void Greedy_PreMeld_DrawsWhenUnder30()
+    public void MoveFinder_PreMeld_DrawsWhenUnder30()
     {
         var rack = new List<Tile> { N(TileColor.Red, 1), N(TileColor.Blue, 1), N(TileColor.Black, 1) };
-        var move = new GreedyMoveFinder().FindMove(EmptyBoard, rack, hasMelded: false);
+        var move = new OptimalMoveFinder().FindMove(EmptyBoard, rack, hasMelded: false);
         Assert.Null(move); // 3 points < 30 → draw
     }
 
     [Fact]
-    public void Greedy_PostMeld_AttachesTileToExistingRun()
+    public void MoveFinder_PostMeld_AttachesTileToExistingRun()
     {
         var existing = new List<Tile> { N(TileColor.Red, 4), N(TileColor.Red, 5), N(TileColor.Red, 6) };
         var board = new List<IReadOnlyList<Tile>> { existing };
         var rack = new List<Tile> { N(TileColor.Red, 7) };
-        var move = new GreedyMoveFinder().FindMove(board, rack, hasMelded: true);
+        var move = new OptimalMoveFinder().FindMove(board, rack, hasMelded: true);
         Assert.NotNull(move);
         Assert.Contains(rack[0].Id, move!.PlayedTileIds);
     }
@@ -83,8 +84,31 @@ public class EngineExtrasTests
     public void Hint_RecommendsDrawWhenNoMove()
     {
         var rack = new List<Tile> { N(TileColor.Red, 1), N(TileColor.Blue, 2), N(TileColor.Black, 8) };
-        var hint = new HintService(new GreedyMoveFinder()).GetHint(EmptyBoard, rack, hasMelded: false);
+        var hint = new HintService(new OptimalMoveFinder()).GetHint(EmptyBoard, rack, hasMelded: false);
         Assert.True(hint.ShouldDraw);
+    }
+
+    // ---- Jokers ----
+
+    [Fact]
+    public void TilePool_HasOneRedAndOneBlackJoker()
+    {
+        var jokers = TilePool.BuildOrdered().Where(t => t.IsJoker).ToList();
+        Assert.Equal(2, jokers.Count);
+        Assert.Contains(jokers, j => j.Color == TileColor.Red);
+        Assert.Contains(jokers, j => j.Color == TileColor.Black);
+    }
+
+    [Fact]
+    public void JokerColourIsDecorativeAndTheRulesIgnoreIt()
+    {
+        // A black joker still stands in for the red 12 in a red run...
+        var run = new List<Tile> { N(TileColor.Red, 11), J(TileColor.Black), N(TileColor.Red, 13) };
+        Assert.True(RuleValidator.IsValidSet(run));
+
+        // ...and a red joker completes a group that already contains a red tile.
+        var group = new List<Tile> { N(TileColor.Red, 7), N(TileColor.Blue, 7), J(TileColor.Red) };
+        Assert.True(RuleValidator.IsValidSet(group));
     }
 
     // ---- TurnHistory ----

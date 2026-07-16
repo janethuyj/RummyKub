@@ -15,7 +15,7 @@ public sealed class GameCoordinator
 {
     private readonly IRoomStore _store;
     private readonly IHubContext<GameHub> _hub;
-    private readonly IMoveFinder _finder = new GreedyMoveFinder();
+    private readonly IMoveFinder _finder = new OptimalMoveFinder();
     private const int AiThinkMs = 900;
 
     public GameCoordinator(IRoomStore store, IHubContext<GameHub> hub)

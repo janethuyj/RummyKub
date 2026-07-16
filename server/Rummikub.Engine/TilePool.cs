@@ -2,7 +2,8 @@ namespace Rummikub.Engine;
 
 /// <summary>
 /// Builds and shuffles the standard 106-tile pool: for each of the 4 colours,
-/// numbers 1..13 in two copies (104 tiles), plus 2 jokers. The RNG seed is
+/// numbers 1..13 in two copies (104 tiles), plus 2 jokers — one red and one black,
+/// as in a real set, so the two are told apart on screen. The RNG seed is
 /// injectable so shuffles are reproducible in tests.
 /// </summary>
 public static class TilePool
@@ -20,8 +21,8 @@ public static class TilePool
                 for (int number = 1; number <= 13; number++)
                     tiles.Add(Tile.Numbered(id++, color, number));
         }
-        tiles.Add(Tile.Joker(id++));
-        tiles.Add(Tile.Joker(id));
+        tiles.Add(Tile.Joker(id++, TileColor.Red));
+        tiles.Add(Tile.Joker(id, TileColor.Black));
         return tiles;
     }
 

@@ -316,9 +316,15 @@ export const useStore = create<Store>((set, get) => ({
       set({ error: selectedIds.length > 0 ? 'The selected tiles do not form a complete set.' : 'No complete sets in your hand to play.' });
       return;
     }
+    // The board never grows, so a set can be turned away when it is full. Only take the
+    // sets that actually landed off the rack, or their tiles would vanish from both.
     const grid = cloneGrid(working.grid);
-    for (const s of sets) placeSetByDefault(grid, s);
-    const usedIds = new Set(sets.flat().map((t) => t.id));
+    const placed = sets.filter((s) => placeSetByDefault(grid, s));
+    if (placed.length === 0) {
+      set({ error: 'No room left on the board for that.' });
+      return;
+    }
+    const usedIds = new Set(placed.flat().map((t) => t.id));
     const rack = working.rack.filter((t) => !usedIds.has(t.id));
     set({
       undoStack: [...get().undoStack, clone(working)],

@@ -51,7 +51,7 @@ second browser tab/window, create a room in one, and join by code in the other
 
 ### Tests
 ```bash
-dotnet test          # 38 engine unit tests (rules, meld, AI, undo, session)
+dotnet test          # 52 engine unit tests (rules, meld, AI, undo, session)
 ```
 
 ### Production build

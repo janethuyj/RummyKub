@@ -4,9 +4,10 @@ export type TileColor = 'red' | 'blue' | 'black' | 'orange';
 
 export interface Tile {
   id: number;
-  color: TileColor | null; // null for jokers
+  color: TileColor | null; // the colour the rules go by; null for jokers
   number: number;
   isJoker: boolean;
+  jokerColor: TileColor | null; // jokers only: which printed joker this is. Decorative.
 }
 
 export interface PlayerState {
