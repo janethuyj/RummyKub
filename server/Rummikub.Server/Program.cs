@@ -28,7 +28,11 @@ app.UseCors(DevCors);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+// GIT_SHA is baked into the image at build time (see Dockerfile); "dev" when
+// running from source. Lets you confirm which commit a deployment is serving:
+//   wget -qO- http://localhost:8080/health
+var version = Environment.GetEnvironmentVariable("GIT_SHA") ?? "dev";
+app.MapGet("/health", () => Results.Ok(new { status = "ok", version }));
 app.MapHub<GameHub>("/hub/game");
 
 // SPA fallback: any non-API route returns index.html so client-side routing works.
