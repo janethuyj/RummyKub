@@ -20,6 +20,10 @@ RUN dotnet publish server/Rummikub.Server/Rummikub.Server.csproj -c Release -o /
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 COPY --from=server /app ./
+# Stamp the build's git commit so /health can report which version is deployed.
+# Pass it at build time:  docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) ...
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Rummikub.Server.dll"]

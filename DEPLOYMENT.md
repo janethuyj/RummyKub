@@ -119,34 +119,75 @@ certificate on first request, and SignalR runs over `wss://`.
 Your laptop has more CPU and RAM than an Always Free VM and keeps the layer cache
 warm between deploys. The VM only runs `docker load`, which costs it nothing.
 
-First check the VM's architecture — `uname -m` gives `x86_64` (E2 shapes) or
-`aarch64` (A1 shapes). If it matches your workstation, a plain `docker build`
-works. If you are on x86 and the VM is arm64, cross-build with
+First check the VM's architecture — SSH in and run `uname -m`. It gives `x86_64`
+(E2 shapes) or `aarch64` (A1 shapes). If it matches your workstation, a plain
+`docker build` works. If you are on x86 and the VM is arm64, cross-build with
 `docker buildx build --platform linux/arm64 -t rummykub:latest --load .`
 (needs Docker Desktop's containerd image store enabled).
 
-```bash
-# On your workstation, from the repo root. Use a POSIX shell (Git Bash on
-# Windows) — PowerShell corrupts binary data in pipes.
-docker build -t rummykub:latest .
-docker save rummykub:latest | gzip > rummykub.tar.gz    # ~250 MB -> ~100 MB
+The commands below are **PowerShell** (the default Windows shell). Run them from
+the repo root.
 
-scp rummykub.tar.gz ubuntu@<vm-ip>:~
-ssh ubuntu@<vm-ip> "docker load -i rummykub.tar.gz && rm rummykub.tar.gz"
+```powershell
+# 1. Build the image locally, stamping the git commit into it so /health can
+#    report which version is deployed (see the verify step below).
+docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t rummykub:latest .
+
+# 2. Save it to a tarball. Use -o, NOT `| gzip` — PowerShell has no gzip and its
+#    pipeline corrupts binary data. -o has docker write the file directly.
+docker save rummykub:latest -o rummykub.tar          # ~220 MB, uncompressed
+
+# 3. Copy the tarball AND the VM compose overlay to the VM. The overlay is a new
+#    file; without it the compose command below fails with "no such file".
+scp -i $key rummykub.tar                    ubuntu@<vm-ip>:~
+scp -i $key deploy\docker-compose.vm.yml    ubuntu@<vm-ip>:~/RummyKub/deploy/
 ```
 
-`docker load` detects the gzip automatically. Then on the VM, start it with the
-overlay that points at the loaded image (note: **no** `--build`):
+> **SSH key setup (first time).** `$key` is the path to your OCI private key,
+> e.g. `$key = "C:\Users\<you>\.ssh\your-oracle-key"`. If `scp`/`ssh` reports
+> *"Unprotected private key file"*, Windows permissions on the key are too open —
+> lock it to just you, once:
+> ```powershell
+> icacls $key /inheritance:r
+> icacls $key /grant:r "$($env:USERNAME):F"
+> ```
+> The key's passphrase is prompted separately. To avoid retyping it every command:
+> `Start-Service ssh-agent; ssh-add $key` (then you can drop `-i $key`).
+
+Then SSH in and load the image and start the stack. Docker on the VM needs root,
+so use `sudo` (or add yourself to the `docker` group — see below):
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml up -d
+ssh -i <key> ubuntu@<vm-ip>
+# on the VM, from ~/RummyKub:
+sudo docker load -i ~/rummykub.tar          # -> "Loaded image: rummykub:latest"
+sudo docker images | grep rummykub          # confirm it's there before continuing
+rm ~/rummykub.tar                           # cleanup (optional)
+
+sudo docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml up -d
 ```
 
 `deploy/docker-compose.vm.yml` replaces the `build:` block with
-`image: rummykub:latest`. Keep passing both `-f` flags on every later command.
+`image: rummykub:latest`, so this starts from the loaded image with **no** build.
+Keep passing both `-f` flags on every later compose command.
 
-**Update later:** repeat the build/save/scp/load above, then re-run the same
-`up -d`. The previous image stays behind as a rollback — `docker images` shows it.
+> **Skip `sudo` on Docker:** run `sudo usermod -aG docker $USER` once, then
+> `newgrp docker` (applies the group to your current shell without logging out).
+> After that, `docker ...` works without `sudo`.
+
+**Verify:**
+```bash
+sudo docker ps                              # app + caddy both Up
+wget -qO- http://localhost:8080/health      # -> {"status":"ok","version":"<sha>"}
+```
+The `version` is the git commit the image was built from. Compare it to
+`git rev-parse --short HEAD` on your workstation — if they match, the VM is
+running exactly what you built, and any staleness is browser cache, not the
+deploy. This endpoint is JSON (not the cached SPA), so it always reflects reality.
+
+**Update later:** repeat build → `docker save -o` → `scp` the tarball → `docker
+load` → the same `up -d`. You only re-copy the overlay if it changed. The
+previous image stays behind as a rollback — `docker images` shows it.
 
 ### 3f. Add swap (do this regardless)
 
@@ -159,10 +200,11 @@ sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-**Logs / health:**
+**Logs / health:** (drop `sudo` if you added yourself to the `docker` group;
+the VM images ship `wget`, not `curl`)
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml logs -f app
-curl -k https://rummykub.helleon.com/health
+sudo docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml logs -f app
+wget -qO- http://localhost:8080/health
 ```
 
 ### Optional: use a registry (OCIR) instead of copying tarballs
