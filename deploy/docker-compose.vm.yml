@@ -1,0 +1,14 @@
+# Overlay for the VM: run a prebuilt image instead of compiling on the box.
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml up -d
+#
+# The Always Free 1 GB shapes (E2.1.Micro) cannot run `dotnet publish` — Roslyn
+# needs more memory than the box has, and the build stalls hard enough to lock
+# sshd out. Build on a workstation and ship the image instead; see DEPLOYMENT.md.
+#
+# Load the image BEFORE running this, or compose will fall back to building:
+#   docker load -i rummykub.tar.gz
+services:
+  app:
+    image: rummykub:latest
+    pull_policy: never   # the image is loaded locally; there is no registry to pull from
