@@ -96,8 +96,17 @@ The Caddyfile is already set to `rummykub.helleon.com`. (To use a different host
 edit `deploy/Caddyfile` before the next step.)
 
 ### 3d. Build and run (Caddy auto-provisions HTTPS)
+
+> ⚠️ **Do not build on a 1 GB shape.** `VM.Standard.E2.1.Micro` has 954 MB of
+> usable RAM and no swap by default. `dotnet publish` needs more than that, so
+> the build does not merely run slowly — it thrashes the page cache until the box
+> stops accepting new SSH connections, and you have to reboot from the OCI
+> console. Use [§3e](#3e-build-on-a-workstation-and-ship-the-image-recommended)
+> instead. Building on the VM is only reasonable on an A1.Flex with ≥4 GB.
+
+If your VM has the memory for it:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d --build
+sudo docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 Building on the VM produces the right CPU architecture automatically (arm64 on
@@ -105,26 +114,70 @@ A1, x86 on E2). Make sure the `rummykub` A record already points at the VM, then
 visit **https://rummykub.helleon.com** — Caddy fetches a Let’s Encrypt
 certificate on first request, and SignalR runs over `wss://`.
 
-**Update later:**
+### 3e. Build on a workstation and ship the image (recommended)
+
+Your laptop has more CPU and RAM than an Always Free VM and keeps the layer cache
+warm between deploys. The VM only runs `docker load`, which costs it nothing.
+
+First check the VM's architecture — `uname -m` gives `x86_64` (E2 shapes) or
+`aarch64` (A1 shapes). If it matches your workstation, a plain `docker build`
+works. If you are on x86 and the VM is arm64, cross-build with
+`docker buildx build --platform linux/arm64 -t rummykub:latest --load .`
+(needs Docker Desktop's containerd image store enabled).
+
 ```bash
-git pull && docker compose -f deploy/docker-compose.yml up -d --build
+# On your workstation, from the repo root. Use a POSIX shell (Git Bash on
+# Windows) — PowerShell corrupts binary data in pipes.
+docker build -t rummykub:latest .
+docker save rummykub:latest | gzip > rummykub.tar.gz    # ~250 MB -> ~100 MB
+
+scp rummykub.tar.gz ubuntu@<vm-ip>:~
+ssh ubuntu@<vm-ip> "docker load -i rummykub.tar.gz && rm rummykub.tar.gz"
+```
+
+`docker load` detects the gzip automatically. Then on the VM, start it with the
+overlay that points at the loaded image (note: **no** `--build`):
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml up -d
+```
+
+`deploy/docker-compose.vm.yml` replaces the `build:` block with
+`image: rummykub:latest`. Keep passing both `-f` flags on every later command.
+
+**Update later:** repeat the build/save/scp/load above, then re-run the same
+`up -d`. The previous image stays behind as a rollback — `docker images` shows it.
+
+### 3f. Add swap (do this regardless)
+
+A 954 MB box running Docker, Caddy, and the app has under 500 MB of headroom.
+Swap is what keeps sshd answering when something spikes, so you don't get locked
+out of your own VM:
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
 **Logs / health:**
 ```bash
-docker compose -f deploy/docker-compose.yml logs -f app
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml logs -f app
 curl -k https://rummykub.helleon.com/health
 ```
 
-### Optional: build elsewhere and push to OCIR instead of building on the VM
-If you build on an **x86 machine** for an **A1 (arm64) VM**, cross-build:
+### Optional: use a registry (OCIR) instead of copying tarballs
+The tarball in §3e ships ~100 MB on every deploy. A registry only transfers
+changed layers, which is worth the setup if you deploy often:
 ```bash
-docker buildx build --platform linux/arm64 \
+docker buildx build --platform linux/amd64 \
   -t <region-key>.ocir.io/<namespace>/rummykub:latest --push .
 ```
-Then on the VM, set `image:` in `deploy/docker-compose.yml`, `docker login
-<region-key>.ocir.io` (username `<namespace>/<user>`, password = Auth Token),
-and `docker compose ... up -d` (no `--build`).
+On the VM, `docker login <region-key>.ocir.io` (username `<namespace>/<user>`,
+password = Auth Token), set the same image in `deploy/docker-compose.vm.yml`,
+drop `pull_policy: never`, and `up -d` (no `--build`).
+
+Building in **GitHub Actions** and pushing to OCIR from there removes the manual
+step entirely — the repo already has CI in `.github/workflows/ci.yml`.
 
 ---
 
