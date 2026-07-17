@@ -27,6 +27,21 @@ rummykub.helleon.com {
 	reverse_proxy app:8080
 }
 
+# --- Co-hosted apps (same compose stack) ---
+# MahjongHu joins this stack as the `majiang` service via
+# deploy/docker-compose.majiang.yml (shipped by the MahjongHu repo's deploy
+# script), and the GameCenter static page is mounted into this container at
+# /srv/gamecenter by that same overlay. This file is the source of truth for
+# ALL domains on the VM — deploy scripts overwrite the VM's copy.
+majiang.helleon.com {
+	reverse_proxy majiang:8080
+}
+
+games.helleon.com {
+	root * /srv/gamecenter
+	file_server
+}
+
 # --- Optional: HTTPS on the LAN too ---
 # Replace the `http://10.1.1.16` block above with the version below to have Caddy
 # serve its own internally-signed cert. Browsers will warn until you install
