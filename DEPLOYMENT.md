@@ -175,10 +175,13 @@ Keep passing both `-f` flags on every later compose command.
 > `newgrp docker` (applies the group to your current shell without logging out).
 > After that, `docker ...` works without `sudo`.
 
-**Verify:**
+**Verify:** the app port (8080) is only exposed inside the compose network — it
+is deliberately not published to the host — so check it *through* Caddy's
+container (its Alpine base has `wget`), or via the public URL:
 ```bash
-sudo docker ps                              # app + caddy both Up
-wget -qO- http://localhost:8080/health      # -> {"status":"ok","version":"<sha>"}
+sudo docker ps                                              # app + caddy both Up
+sudo docker exec deploy-caddy-1 wget -qO- http://app:8080/health   # {"status":"ok","version":"<sha>"}
+wget -qO- https://rummykub.helleon.com/health              # the real end-to-end path
 ```
 The `version` is the git commit the image was built from. Compare it to
 `git rev-parse --short HEAD` on your workstation — if they match, the VM is
@@ -200,11 +203,12 @@ sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-**Logs / health:** (drop `sudo` if you added yourself to the `docker` group;
-the VM images ship `wget`, not `curl`)
+**Logs / health:** (drop `sudo` if you added yourself to the `docker` group.
+8080 isn't published to the host — reach it through Caddy or the public URL)
 ```bash
 sudo docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml logs -f app
-wget -qO- http://localhost:8080/health
+sudo docker exec deploy-caddy-1 wget -qO- http://app:8080/health
+wget -qO- https://rummykub.helleon.com/health
 ```
 
 ### Optional: use a registry (OCIR) instead of copying tarballs

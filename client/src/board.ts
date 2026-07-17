@@ -10,12 +10,12 @@ export const BOARD_COLS = 21;
 export const BOARD_ROWS = 8;
 const RUN_ANCHOR = BOARD_COLS - 1 - 13; // 7 -> number 1 at col 8, number 13 at col 20
 
-// Groups live to the left of the run axis, and two fit side by side on one row: the
-// first left-aligned, the second starting at column 5 — clear of a 4-tile first group
-// (columns 0..3), with column 4 blank between them, and up against the run axis at
-// column 8. A table full of same-number melds fills these second slots instead of
-// growing the board, which is fixed at BOARD_ROWS rows.
-const GROUP_STARTS = [0, 5];
+// Groups live to the left of the run axis (columns 0..RUN_ANCHOR). They pack left,
+// each group sitting exactly one blank column after the previous one on its row, so
+// two fit side by side — a 3-tile first group gives `nnn.nnn`, a 4-tile one `nnnn.nnn`.
+// A table full of same-number melds fills these slots instead of growing the board,
+// which is fixed at BOARD_ROWS rows.
+const GROUP_ZONE_END = RUN_ANCHOR + 1; // exclusive: columns 0..RUN_ANCHOR hold groups
 
 export type Cell = Tile | null;
 export type Grid = Cell[][];
@@ -67,13 +67,11 @@ function isGroupSet(set: Tile[]): boolean {
 }
 
 /**
- * A set's tiles in the left-to-right order they must sit in, plus the columns its first
- * tile would like to start at, best first. A group has two candidate slots; a run has
- * one, fixed by its numbers.
+ * A run's tiles in the left-to-right order they must sit in, plus the single column
+ * its first tile starts at (fixed by its numbers). Runs only — groups pack left
+ * dynamically, see groupStartOnRow.
  */
 function setLayout(set: Tile[]): { ordered: Tile[]; starts: number[] } {
-  if (isGroupSet(set)) return { ordered: set, starts: GROUP_STARTS };
-
   // Run: each tile sits at the column matching its number (13 -> last column), with
   // jokers filling the interior/extension numbers.
   const nonJokers = set.filter((t) => !t.isJoker);
@@ -131,49 +129,62 @@ function rowOrder(set: Tile[], rowCount: number): number[] {
   return [...preferred, ...all.filter((r) => !preferred.includes(r))];
 }
 
-/** How many blank columns sit immediately to the left of `start` on row `r`. */
-function gapToLeft(grid: Grid, r: number, start: number): number {
-  let blanks = 0;
-  for (let c = start - 1; c >= 0 && grid[r][c] === null; c--) blanks++;
-  return blanks;
-}
-
 /**
- * Rows to try for a second group, widest breathing room first. Beside a 3-tile group the
- * newcomer gets two blank columns (3 and 4); beside a 4-tile one it gets only column 4
- * and the two read as though they were crowded together. Prefer the roomier row and fall
- * back to the tight one only when nothing better is free.
+ * The column where a group of `length` tiles packs on row `r`: column 0 when the row's
+ * group zone is empty, otherwise one blank column after the rightmost group already
+ * there. Returns -1 when it would cross the run axis or touch a neighbour (runs never
+ * sit in the group zone, so the rightmost filled cell there is always a group).
  */
-function roomiestFirst(grid: Grid, rows: number[], start: number): number[] {
-  // Sort is stable, so rows with equal room keep their original preference order.
-  return [...rows].sort((a, b) => gapToLeft(grid, b, start) - gapToLeft(grid, a, start));
+function groupStartOnRow(grid: Grid, r: number, length: number): number {
+  let rightmost = -1;
+  for (let c = 0; c < GROUP_ZONE_END; c++) if (grid[r][c] !== null) rightmost = c;
+  const start = rightmost < 0 ? 0 : rightmost + 2;
+  if (start + length > GROUP_ZONE_END) return -1;
+  return spanFree(grid, r, start, length) ? start : -1;
 }
 
 /**
- * Place one set, packing it into the first row where it fits — so a left-aligned group
- * and a number-axis run can share a row. Single-colour runs prefer their colour's rows.
- * The convention is tried first (each group slot in turn, left slot across every row
- * before the column-5 slot); if every slot is taken the set goes wherever there is room,
- * because showing it out of convention beats not showing it at all.
+ * Place one set. Groups pack into the group zone (columns 0..RUN_ANCHOR): the left
+ * slot fills across every row before any second group, and a second group sits one
+ * blank column after the first, preferring a row whose first group is narrower — so
+ * `nnn.nnn` is chosen over `nnnn.nnn` and the pair stays clear of the run axis. Runs
+ * sit on the number axis, preferring their colour's rows. If nothing fits by
+ * convention the set goes wherever there is room — better shown out of place than
+ * dropped.
  *
- * The board never grows: it stays at BOARD_ROWS rows. Returns false if the set would not
- * fit anywhere, which leaves the caller responsible for not dropping its tiles.
+ * The board never grows: it stays at BOARD_ROWS rows. Returns false if the set would
+ * not fit anywhere, which leaves the caller responsible for not dropping its tiles.
  */
 export function placeSetByDefault(grid: Grid, set: Tile[]): boolean {
   if (set.length === 0) return true;
-  const { ordered, starts } = setLayout(set);
 
-  for (const start of starts) {
-    let rows = rowOrder(set, grid.length).filter((r) => spanFree(grid, r, start, ordered.length));
-    // Only the second group slot has a neighbour to its left worth keeping clear of.
-    // Runs keep their colour's row order untouched.
-    if (start > 0 && isGroupSet(set)) rows = roomiestFirst(grid, rows, start);
-    if (rows.length > 0) {
-      write(grid, rows[0], start, ordered);
+  if (isGroupSet(set)) {
+    const candidates = rowOrder(set, grid.length)
+      .map((r) => ({ r, start: groupStartOnRow(grid, r, set.length) }))
+      .filter((c) => c.start >= 0);
+    // Left slot (start 0) across rows first; then second groups, narrowest first group
+    // first (smaller start => nnn.nnn before nnnn.nnn). The sort is stable, so rows tie-
+    // break by their natural order.
+    const firstSlot = candidates.filter((c) => c.start === 0);
+    const secondSlot = candidates.filter((c) => c.start > 0).sort((a, b) => a.start - b.start);
+    const chosen = firstSlot[0] ?? secondSlot[0];
+    if (chosen) {
+      write(grid, chosen.r, chosen.start, set);
       return true;
+    }
+  } else {
+    const { ordered, starts } = setLayout(set);
+    for (const start of starts) {
+      const rows = rowOrder(set, grid.length).filter((r) => spanFree(grid, r, start, ordered.length));
+      if (rows.length > 0) {
+        write(grid, rows[0], start, ordered);
+        return true;
+      }
     }
   }
 
+  // Nothing fit by convention: drop the set into the first free span anywhere.
+  const ordered = isGroupSet(set) ? set : setLayout(set).ordered;
   for (let r = 0; r < grid.length; r++) {
     for (let start = 0; start + ordered.length <= BOARD_COLS; start++) {
       if (spanFree(grid, r, start, ordered.length)) {

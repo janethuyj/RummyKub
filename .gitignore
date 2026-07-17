@@ -33,6 +33,11 @@ appsettings.Development.local.json
 *.png
 !client/public/**
 
+# ---- Deploy artifacts ----
+# Image tarballs produced by `docker save` for shipping to the VM.
+*.tar
+*.tar.gz
+
 # ---- OS / editor ----
 .DS_Store
 Thumbs.db
