@@ -28,16 +28,20 @@ Write-Host "== 2/4 Saving image tarball ==" -ForegroundColor Cyan
 docker save rummykub:latest -o rummykub.tar
 if ($LASTEXITCODE -ne 0) { throw "docker save failed" }
 
+# Everything ships in ONE scp and installs in ONE ssh, so a passphrase is
+# asked at most twice (zero with ssh-agent: Start-Service ssh-agent; ssh-add <key>).
 Write-Host "== 3/4 Uploading tarball and compose files ==" -ForegroundColor Cyan
-scp -i $KeyPath rummykub.tar "${VmHost}:~/"
+scp -i $KeyPath rummykub.tar deploy/docker-compose.yml deploy/docker-compose.vm.yml deploy/Caddyfile "${VmHost}:~/"
 if ($LASTEXITCODE -ne 0) { throw "scp failed" }
-scp -i $KeyPath deploy/docker-compose.yml deploy/docker-compose.vm.yml deploy/Caddyfile "${VmHost}:~/RummyKub/deploy/"
-if ($LASTEXITCODE -ne 0) { throw "scp compose files failed" }
 
-Write-Host "== 4/4 Loading image and restarting the stack on the VM ==" -ForegroundColor Cyan
-ssh -i $KeyPath $VmHost 'sudo docker load -i ~/rummykub.tar && rm ~/rummykub.tar && cd ~/RummyKub && FLAGS="-f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml" && if [ -f deploy/docker-compose.majiang.yml ]; then FLAGS="$FLAGS -f deploy/docker-compose.majiang.yml"; fi && sudo docker compose $FLAGS up -d && sudo docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile'
+Write-Host "== 4/4 Installing, restarting the stack, and verifying ==" -ForegroundColor Cyan
+ssh -i $KeyPath $VmHost ('sudo docker load -i ~/rummykub.tar && rm ~/rummykub.tar' `
+    + ' && mv ~/docker-compose.yml ~/docker-compose.vm.yml ~/Caddyfile ~/RummyKub/deploy/' `
+    + ' && cd ~/RummyKub' `
+    + ' && FLAGS="-f deploy/docker-compose.yml -f deploy/docker-compose.vm.yml"' `
+    + ' && if [ -f deploy/docker-compose.majiang.yml ]; then FLAGS="$FLAGS -f deploy/docker-compose.majiang.yml"; fi' `
+    + ' && sudo docker compose $FLAGS up -d' `
+    + ' && sudo docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile' `
+    + ' && sleep 2 && sudo docker exec deploy-caddy-1 wget -qO- http://app:8080/health')
 if ($LASTEXITCODE -ne 0) { throw "remote deploy failed" }
-
-Write-Host "== Verifying ==" -ForegroundColor Cyan
-ssh -i $KeyPath $VmHost "sudo docker exec deploy-caddy-1 wget -qO- http://app:8080/health"
 Write-Host "`nDeployed $sha. Visit https://rummykub.helleon.com" -ForegroundColor Green
